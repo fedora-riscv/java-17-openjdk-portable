@@ -298,7 +298,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        12
-%global rpmrelease      8
+%global rpmrelease      9
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -937,7 +937,8 @@ Requires: libXcomposite%{?_isa}
 Requires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
 OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
 # for java-X-openjdk package's desktop binding
-%if 0%{?rhel} >= 8
+# Where recommendations are available, recommend Gtk+ for the Swing look and feel
+%if 0%{?rhel} >= 8 || 0%{?fedora} > 0
 Recommends: gtk3%{?_isa}
 %endif
 
@@ -978,8 +979,11 @@ Requires: cups-libs
 Requires(post):   %{alternatives_requires}
 # Postun requires alternatives to uninstall tool alternatives
 Requires(postun): %{alternatives_requires}
-# for optional support of kernel stream control, card reader and printing bindings
+# Where suggestions are available, recommend the sctp and pcsc libraries
+# for optional support of kernel stream control and card reader
+%if 0%{?rhel} >= 8 || 0%{?fedora} > 0
 Suggests: lksctp-tools%{?_isa}, pcsc-lite-libs%{?_isa}
+%endif
 
 # Standard JPackage base provides
 Provides: jre-%{javaver}-%{origin}-headless%{?1} = %{epoch}:%{version}-%{release}
@@ -1091,7 +1095,8 @@ Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 
 Epoch:   1
 Summary: %{origin_nice} %{featurever} Runtime Environment
-%if 0%{?rhel} <= 8
+# Groups are only used up to RHEL 8 and on Fedora versions prior to F30
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1254,7 +1259,7 @@ The %{origin_nice} %{featurever} runtime environment.
 %if %{include_debug_build}
 %package slowdebug
 Summary: %{origin_nice} %{featurever} Runtime Environment %{debug_on}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1267,7 +1272,7 @@ The %{origin_nice} %{featurever} runtime environment.
 %if %{include_fastdebug_build}
 %package fastdebug
 Summary: %{origin_nice} %{featurever} Runtime Environment %{fastdebug_on}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1280,7 +1285,7 @@ The %{origin_nice} %{featurever} runtime environment.
 %if %{include_normal_build}
 %package headless
 Summary: %{origin_nice} %{featurever} Headless Runtime Environment
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1293,7 +1298,9 @@ The %{origin_nice} %{featurever} runtime environment without audio and video sup
 %if %{include_debug_build}
 %package headless-slowdebug
 Summary: %{origin_nice} %{featurever} Runtime Environment %{debug_on}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
+%endif
 
 %{java_headless_rpo -- %{debug_suffix_unquoted}}
 
@@ -1305,7 +1312,9 @@ The %{origin_nice} %{featurever} runtime environment without audio and video sup
 %if %{include_fastdebug_build}
 %package headless-fastdebug
 Summary: %{origin_nice} %{featurever} Runtime Environment %{fastdebug_on}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
+%endif
 
 %{java_headless_rpo -- %{fastdebug_suffix_unquoted}}
 
@@ -1317,7 +1326,7 @@ The %{origin_nice} %{featurever} runtime environment without audio and video sup
 %if %{include_normal_build}
 %package devel
 Summary: %{origin_nice} %{featurever} Development Environment
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1330,7 +1339,7 @@ The %{origin_nice} %{featurever} development tools.
 %if %{include_debug_build}
 %package devel-slowdebug
 Summary: %{origin_nice} %{featurever} Development Environment %{debug_on}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1344,7 +1353,9 @@ The %{origin_nice} %{featurever} development tools.
 %if %{include_fastdebug_build}
 %package devel-fastdebug
 Summary: %{origin_nice} %{featurever} Development Environment %{fastdebug_on}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Tools
+%endif
 
 %{java_devel_rpo -- %{fastdebug_suffix_unquoted}}
 
@@ -1393,7 +1404,7 @@ The %{origin_nice} %{featurever} libraries for static linking.
 %if %{include_normal_build}
 %package jmods
 Summary: JMods for %{origin_nice} %{featurever}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1406,7 +1417,7 @@ The JMods for %{origin_nice} %{featurever}.
 %if %{include_debug_build}
 %package jmods-slowdebug
 Summary: JMods for %{origin_nice} %{featurever} %{debug_on}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1420,7 +1431,9 @@ The JMods for %{origin_nice} %{featurever}.
 %if %{include_fastdebug_build}
 %package jmods-fastdebug
 Summary: JMods for %{origin_nice} %{featurever} %{fastdebug_on}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Tools
+%endif
 
 %{java_jmods_rpo -- %{fastdebug_suffix_unquoted}}
 
@@ -1432,7 +1445,7 @@ The JMods for %{origin_nice} %{featurever}.
 %if %{include_normal_build}
 %package demo
 Summary: %{origin_nice} %{featurever} Demos
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1445,7 +1458,7 @@ The %{origin_nice} %{featurever} demos.
 %if %{include_debug_build}
 %package demo-slowdebug
 Summary: %{origin_nice} %{featurever} Demos %{debug_on}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1459,7 +1472,9 @@ The %{origin_nice} %{featurever} demos.
 %if %{include_fastdebug_build}
 %package demo-fastdebug
 Summary: %{origin_nice} %{featurever} Demos %{fastdebug_on}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
+%endif
 
 %{java_demo_rpo -- %{fastdebug_suffix_unquoted}}
 
@@ -1471,7 +1486,7 @@ The %{origin_nice} %{featurever} demos.
 %if %{include_normal_build}
 %package src
 Summary: %{origin_nice} %{featurever} Source Bundle
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1485,7 +1500,7 @@ class library source code for use by IDE indexers and debuggers.
 %if %{include_debug_build}
 %package src-slowdebug
 Summary: %{origin_nice} %{featurever} Source Bundle %{for_debug}
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
@@ -1499,7 +1514,9 @@ The %{compatiblename}-src-slowdebug sub-package contains the complete %{origin_n
 %if %{include_fastdebug_build}
 %package src-fastdebug
 Summary: %{origin_nice} %{featurever} Source Bundle %{for_fastdebug}
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
+%endif
 
 %{java_src_rpo -- %{fastdebug_suffix_unquoted}}
 
@@ -1511,7 +1528,7 @@ The %{compatiblename}-src-fastdebug sub-package contains the complete %{origin_n
 %if %{include_normal_build}
 %package javadoc
 Summary: %{origin_nice} %{featurever} API documentation
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Documentation
 %endif
 Requires: javapackages-filesystem
@@ -1526,7 +1543,7 @@ The %{origin_nice} %{featurever} API documentation.
 %if %{include_normal_build}
 %package javadoc-zip
 Summary: %{origin_nice} %{featurever} API documentation compressed in a single archive
-%if 0%{?rhel} <= 8
+%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Documentation
 %endif
 Requires: javapackages-filesystem
@@ -2355,6 +2372,8 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
-* Thu Nov 18 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.0.0.35-8
-- inital import
+* Mov Nov 29 2021 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-9
+- Handle Fedora in distro conditionals that currently only pertain to RHEL.
 
+* Thu Nov 18 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.0.0.35-8
+-- inital import
