@@ -308,7 +308,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        12
-%global rpmrelease      15
+%global rpmrelease      16
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1179,7 +1179,7 @@ Provides: java-%{origin}-src%{?1} = %{epoch}:%{version}-%{release}
 
 Name:    java-17-%{origin}
 Version: %{newjavaver}.%{buildver}
-Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}.1
+Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -1294,6 +1294,7 @@ Patch1013: rh1991003-enable_fips_keys_import.patch
 # RH2021263: Resolve outstanding FIPS issues
 Patch1014: rh2021263-fips_ensure_security_initialised.patch
 Patch1015: rh2021263-fips_missing_native_returns.patch
+Patch1016: rh2021263-fips_separate_policy_and_fips_init.patch
 
 #############################################
 #
@@ -1715,6 +1716,7 @@ popd # openjdk
 %patch1013
 %patch1014
 %patch1015
+%patch1016
 
 %patch2000
 
@@ -2472,6 +2474,9 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Mon Jan 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-16.rolling
+- Separate crypto policy initialisation from FIPS initialisation, now they are no longer interdependent
+
 * Thu Jan 20 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1:17.0.1.0.12-15.rolling.1
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_36_Mass_Rebuild
 
