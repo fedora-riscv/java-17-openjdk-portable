@@ -1169,7 +1169,7 @@ Provides: java-%{origin}-src%{?1} = %{epoch}:%{version}-%{release}
 
 Name:    java-17-%{origin}
 Version: %{newjavaver}.%{buildver}
-Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}.1
+Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -2460,9 +2460,6 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
-* Thu Jan 20 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1:17.0.1.0.12-13.1
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_36_Mass_Rebuild
-
 * Thu Dec 09 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.1.0.12-12.rolling
 - Storing and restoring alterntives during update manually
 - Fixing Bug 2001567 - update of JDK/JRE is removing its manually selected alterantives and select (as auto) system JDK/JRE
