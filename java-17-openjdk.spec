@@ -334,7 +334,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        8
-%global rpmrelease      7
+%global rpmrelease      8
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1104,6 +1104,8 @@ OrderWithRequires: copy-jdk-configs
 %endif
 # for printing support
 Requires: cups-libs
+# for FIPS PKCS11 provider
+Requires: nss
 # Post requires alternatives to install tool alternatives
 Requires(post):   %{alternatives_requires}
 # Postun requires alternatives to uninstall tool alternatives
@@ -1326,7 +1328,10 @@ Patch1013: rh1991003-enable_fips_keys_import.patch
 # RH2021263: Resolve outstanding FIPS issues
 Patch1014: rh2021263-fips_ensure_security_initialised.patch
 Patch1015: rh2021263-fips_missing_native_returns.patch
+# RH2052819: Fix FIPS reliance on crypto policies
 Patch1016: rh2021263-fips_separate_policy_and_fips_init.patch
+# RH2052829: Detect NSS at Runtime for FIPS detection
+Patch1017: rh2052829-fips_runtime_nss_detection.patch
 
 #############################################
 #
@@ -1361,8 +1366,8 @@ BuildRequires: libXrandr-devel
 BuildRequires: libXrender-devel
 BuildRequires: libXt-devel
 BuildRequires: libXtst-devel
-# Requirements for setting up the nss.cfg and FIPS support
-BuildRequires: nss-devel >= 3.53
+# Requirement for setting up nss.cfg and nss.fips.cfg
+BuildRequires: nss-devel
 BuildRequires: pkgconfig
 BuildRequires: xorg-x11-proto-devel
 BuildRequires: zip
@@ -1757,6 +1762,7 @@ popd # openjdk
 %patch1014
 %patch1015
 %patch1016
+%patch1017
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -1900,7 +1906,7 @@ function buildjdk() {
     --with-boot-jdk=${buildjdk} \
     --with-debug-level=${debuglevel} \
     --with-native-debug-symbols="%{debug_symbols}" \
-    --enable-sysconf-nss \
+    --disable-sysconf-nss \
     --enable-unlimited-crypto \
     --with-zlib=system \
     --with-libjpeg=${link_opt} \
@@ -2528,6 +2534,10 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Wed Feb 23 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
+- Detect NSS at runtime for FIPS detection
+- Turn off build-time NSS linking and go back to an explicit Requires on NSS
+
 * Tue Feb 08 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-7
 - Reinstate JIT builds on x86_32.
 - Add JDK-8282004 to fix missing CALL effects on x86_32.
