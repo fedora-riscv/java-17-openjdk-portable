@@ -314,7 +314,7 @@
 # buildjdkver is usually same as %%{featurever},
 # but in time of bootstrap of next jdk, it is featurever-1,
 # and this it is better to change it here, on single place
-%global buildjdkver 17
+%global buildjdkver %{featurever}
 # We don't add any LTS designator for STS packages (Fedora and EPEL).
 # We need to explicitly exclude EPEL as it would have the %%{rhel} macro defined.
 %if 0%{?rhel} && !0%{?epel}
@@ -1372,7 +1372,7 @@ BuildRequires: pkgconfig
 BuildRequires: xorg-x11-proto-devel
 BuildRequires: zip
 BuildRequires: javapackages-filesystem
-BuildRequires: java-latest-openjdk-devel
+BuildRequires: java-%{buildjdkver}-openjdk-devel
 # Zero-assembler build requirement
 %ifarch %{zero_arches}
 BuildRequires: libffi-devel
@@ -2534,6 +2534,9 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Wed Mar 30 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
+- java-17-openjdk should depend on itself to build, not java-latest-openjdk which is now OpenJDK 18
+
 * Wed Feb 23 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
 - Detect NSS at runtime for FIPS detection
 - Turn off build-time NSS linking and go back to an explicit Requires on NSS
