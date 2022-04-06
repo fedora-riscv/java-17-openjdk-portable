@@ -334,7 +334,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        8
-%global rpmrelease      8
+%global rpmrelease      9
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1332,6 +1332,8 @@ Patch1015: rh2021263-fips_missing_native_returns.patch
 Patch1016: rh2021263-fips_separate_policy_and_fips_init.patch
 # RH2052829: Detect NSS at Runtime for FIPS detection
 Patch1017: rh2052829-fips_runtime_nss_detection.patch
+# RH2052070: Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
+Patch1018: rh2052070-enable_algorithmparameters_in_fips_mode.patch
 
 #############################################
 #
@@ -1763,6 +1765,7 @@ popd # openjdk
 %patch1015
 %patch1016
 %patch1017
+%patch1018
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -2534,6 +2537,9 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Wed Apr 06 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-9
+- Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
+
 * Wed Mar 30 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
 - java-17-openjdk should depend on itself to build, not java-latest-openjdk which is now OpenJDK 18
 
