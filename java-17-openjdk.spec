@@ -305,7 +305,7 @@
 # New Version-String scheme-style defines
 %global featurever 17
 %global interimver 0
-%global updatever 2
+%global updatever 3
 %global patchver 0
 # If you bump featurever, you must also bump vendor_version_string
 # Used via new version scheme. JDK 17 was
@@ -333,8 +333,8 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        8
-%global rpmrelease      9
+%global buildver        1
+%global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -357,7 +357,7 @@
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
 # - N%%{?extraver}{?dist} for GA releases
-%global is_ga           1
+%global is_ga           0
 %if %{is_ga}
 %global build_type GA
 %global expected_ea_designator ""
@@ -1342,6 +1342,8 @@ Patch1018: rh2052070-enable_algorithmparameters_in_fips_mode.patch
 #############################################
 # JDK-8282004: x86_32.ad rules that call SharedRuntime helpers should have CALL effects
 Patch7: jdk8282004-x86_32-missing_call_effects.patch
+# JDK-8283911: DEFAULT_PROMOTED_VERSION_PRE not reset to 'ea' for jdk-17.0.4
+Patch2001: jdk8283911-default_promoted_version_pre.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -1766,6 +1768,8 @@ popd # openjdk
 %patch1016
 %patch1017
 %patch1018
+
+%patch2001
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -2537,6 +2541,12 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Fri Apr 08 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.1-0.1.ea
+- Update to jdk-17.0.3.0+1
+- Update release notes to 17.0.3.0+1
+- Switch to EA mode for 17.0.3 pre-release builds.
+- Add JDK-8283911 to fix bad DEFAULT_PROMOTED_VERSION_PRE value
+
 * Wed Apr 06 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-9
 - Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
 
