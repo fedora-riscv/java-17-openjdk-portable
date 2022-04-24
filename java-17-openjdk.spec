@@ -333,7 +333,7 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        5
+%global buildver        7
 %global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
@@ -353,11 +353,14 @@
 # Strip up to 6 trailing zeros in newjavaver, as the JDK does, to get the correct version used in filenames
 %global filever %(svn=%{newjavaver}; for i in 1 2 3 4 5 6 ; do svn=${svn%%.0} ; done; echo ${svn})
 
+# The tag used to create the OpenJDK tarball
+%global vcstag jdk-%{filever}+%{buildver}%{?tagsuffix:-%{tagsuffix}}
+
 # Define milestone (EA for pre-releases, GA for releases)
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
 # - N%%{?extraver}{?dist} for GA releases
-%global is_ga           0
+%global is_ga           1
 %if %{is_ga}
 %global build_type GA
 %global expected_ea_designator ""
@@ -1249,9 +1252,8 @@ License:  ASL 1.1 and ASL 2.0 and BSD and BSD with advertising and GPL+ and GPLv
 URL:      http://openjdk.java.net/
 
 
-# to regenerate source0 (jdk) run update_package.sh
-# update_package.sh contains hard-coded repos, revisions, tags, and projects to regenerate the source archives
-Source0: openjdk-jdk%{featurever}u-jdk-%{filever}+%{buildver}%{?tagsuffix:-%{tagsuffix}}.tar.xz
+# The source tarball, generated using generate_source_tarball.sh
+Source0: openjdk-jdk%{featurever}u-%{vcstag}.tar.xz
 
 # Use 'icedtea_sync.sh' to update the following
 # They are based on code contained in the IcedTea project (6.x).
@@ -1342,8 +1344,6 @@ Patch1018: rh2052070-enable_algorithmparameters_in_fips_mode.patch
 #############################################
 # JDK-8282004: x86_32.ad rules that call SharedRuntime helpers should have CALL effects
 Patch7: jdk8282004-x86_32-missing_call_effects.patch
-# JDK-8283911: DEFAULT_PROMOTED_VERSION_PRE not reset to 'ea' for jdk-17.0.4
-Patch2001: jdk8283911-default_promoted_version_pre.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -1768,8 +1768,6 @@ popd # openjdk
 %patch1016
 %patch1017
 %patch1018
-
-%patch2001
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -2541,6 +2539,13 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Sun Apr 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-1
+- April 2022 security update to jdk 17.0.3+7
+- Update release notes to 17.0.3.0+7
+- Update README.md and generate_source_tarball.sh to match CentOS
+- Switch to GA mode for release
+- JDK-8283911 patch no longer needed now we're GA...
+
 * Wed Apr 13 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.5-0.1.ea
 - Update to jdk-17.0.3.0+5
 - Update release notes to 17.0.3.0+5
