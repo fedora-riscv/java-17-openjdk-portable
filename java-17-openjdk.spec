@@ -327,6 +327,8 @@
 
 # Define IcedTea version used for SystemTap tapsets and desktop file
 %global icedteaver      6.0.0pre00-c848b93a8598
+# Define current Git revision for the FIPS support patches
+%global fipsver 3625385b13d
 
 # Standard JPackage naming and versioning defines
 %global origin          openjdk
@@ -334,7 +336,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        7
-%global rpmrelease      1
+%global rpmrelease      2
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1301,41 +1303,31 @@ Patch1:    rh1648242-accessible_toolkit_crash_do_not_break_jvm.patch
 # Restrict access to java-atk-wrapper classes
 Patch2:    rh1648644-java_access_bridge_privileged_security.patch
 Patch3:    rh649512-remove_uses_of_far_in_jpeg_libjpeg_turbo_1_4_compat_for_jdk10_and_up.patch
-# Follow system wide crypto policy RHBZ#1249083
-Patch4:    pr3183-rh1340845-support_fedora_rhel_system_crypto_policy.patch
-# PR3695: Allow use of system crypto policy to be disabled by the user
-Patch5:    pr3695-toggle_system_crypto_policy.patch
-# Depend on pcs-lite-libs instead of pcs-lite-devel as this is only in optional repo
+# Depend on pcsc-lite-libs instead of pcsc-lite-devel as this is only in optional repo
 Patch6: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch
 
-# FIPS support patches
+# Crypto policy and FIPS support patches
+# Patch is generated from the fips-17u tree at https://github.com/rh-openjdk/jdk/tree/fips-17u
+# as follows: git diff %%{vcstag} src make > fips-17u-$(git show -s --format=%h HEAD).patch
+# Diff is limited to src and make subdirectories to exclude .github changes
+# Fixes currently included:
+# PR3183, RH1340845: Follow system wide crypto policy
+# PR3695: Allow use of system crypto policy to be disabled by the user
 # RH1655466: Support RHEL FIPS mode using SunPKCS11 provider
-Patch1001: rh1655466-global_crypto_and_fips.patch
 # RH1818909: No ciphersuites availale for SSLSocket in FIPS mode
-Patch1002: rh1818909-fips_default_keystore_type.patch
 # RH1860986: Disable TLSv1.3 with the NSS-FIPS provider until PKCS#11 v3.0 support is available
-Patch1004: rh1860986-disable_tlsv1.3_in_fips_mode.patch
 # RH1915071: Always initialise JavaSecuritySystemConfiguratorAccess
-Patch1007: rh1915071-always_initialise_configurator_access.patch
 # RH1929465: Improve system FIPS detection
-Patch1008: rh1929465-improve_system_FIPS_detection.patch
-Patch1011: rh1929465-dont_define_unused_throwioexception.patch
 # RH1995150: Disable non-FIPS crypto in SUN and SunEC security providers
-Patch1009: rh1995150-disable_non-fips_crypto.patch
 # RH1996182: Login to the NSS software token in FIPS mode
-Patch1010: rh1996182-login_to_nss_software_token.patch
-Patch1012: rh1996182-extend_security_policy.patch
 # RH1991003: Allow plain key import unless com.redhat.fips.plainKeySupport is set to false
-Patch1013: rh1991003-enable_fips_keys_import.patch
 # RH2021263: Resolve outstanding FIPS issues
-Patch1014: rh2021263-fips_ensure_security_initialised.patch
-Patch1015: rh2021263-fips_missing_native_returns.patch
 # RH2052819: Fix FIPS reliance on crypto policies
-Patch1016: rh2021263-fips_separate_policy_and_fips_init.patch
 # RH2052829: Detect NSS at Runtime for FIPS detection
-Patch1017: rh2052829-fips_runtime_nss_detection.patch
 # RH2052070: Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
-Patch1018: rh2052070-enable_algorithmparameters_in_fips_mode.patch
+# RH2023467: Enable FIPS keys export
+# RH2094027: SunEC runtime permission for FIPS
+Patch1001: fips-17u-%{fipsver}.patch
 
 #############################################
 #
@@ -1745,29 +1737,15 @@ pushd %{top_level_dir_name}
 %patch1 -p1
 %patch2 -p1
 %patch3 -p1
-%patch4 -p1
-%patch5 -p1
 %patch6 -p1
 %patch7 -p1
+# Add crypto policy and FIPS support
+%patch1001 -p1
+# nss.cfg PKCS11 support; must come last as it also alters java.security
+%patch1000 -p1
 popd # openjdk
 
-%patch1000
 %patch600
-%patch1001
-%patch1002
-%patch1004
-%patch1007
-%patch1008
-%patch1009
-%patch1010
-%patch1011
-%patch1012
-%patch1013
-%patch1014
-%patch1015
-%patch1016
-%patch1017
-%patch1018
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -2539,6 +2517,12 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Sun Jun 12 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-2
+- Rebase FIPS patches from fips-17u branch and simplify by using a single patch from that repository
+- Rebase RH1648249 nss.cfg patch so it applies after the FIPS patch
+- RH2023467: Enable FIPS keys export
+- RH2094027: SunEC runtime permission for FIPS
+
 * Sun Apr 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-1
 - April 2022 security update to jdk 17.0.3+7
 - Update release notes to 17.0.3.0+7
