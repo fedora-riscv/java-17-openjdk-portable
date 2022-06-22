@@ -328,7 +328,7 @@
 # Define IcedTea version used for SystemTap tapsets and desktop file
 %global icedteaver      6.0.0pre00-c848b93a8598
 # Define current Git revision for the FIPS support patches
-%global fipsver 3625385b13d
+%global fipsver f8142a23d0a
 
 # Standard JPackage naming and versioning defines
 %global origin          openjdk
@@ -336,7 +336,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        7
-%global rpmrelease      2
+%global rpmrelease      3
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1327,6 +1327,8 @@ Patch6: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-d
 # RH2052070: Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
 # RH2023467: Enable FIPS keys export
 # RH2094027: SunEC runtime permission for FIPS
+# RH2036462: sun.security.pkcs11.wrapper.PKCS11.getInstance breakage
+# RH2090378: Revert to disabling system security properties and FIPS mode support together
 Patch1001: fips-17u-%{fipsver}.patch
 
 #############################################
@@ -2035,6 +2037,12 @@ top_dir_abs_staticlibs_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{staticli
 
 export JAVA_HOME=${top_dir_abs_main_build_path}/images/%{jdkimage}
 
+# Pre-test setup
+
+# Turn on system security properties
+sed -i -e "s:^security.useSystemPropertiesFile=.*:security.useSystemPropertiesFile=true:" \
+    ${JAVA_HOME}/conf/security/java.security
+
 #check Shenandoah is enabled
 %if %{use_shenandoah_hotspot}
 $JAVA_HOME//bin/java -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC -version
@@ -2048,9 +2056,14 @@ $JAVA_HOME/bin/java --add-opens java.base/javax.crypto=ALL-UNNAMED TestCryptoLev
 $JAVA_HOME/bin/javac -d . %{SOURCE14}
 $JAVA_HOME/bin/java $(echo $(basename %{SOURCE14})|sed "s|\.java||")
 
-# Check system crypto (policy) can be disabled
+# Check system crypto (policy) is active and can be disabled
+# Test takes a single argument - true or false - to state whether system
+# security properties are enabled or not.
 $JAVA_HOME/bin/javac -d . %{SOURCE15}
-$JAVA_HOME/bin/java -Djava.security.disableSystemPropertiesFile=true $(echo $(basename %{SOURCE15})|sed "s|\.java||")
+export PROG=$(echo $(basename %{SOURCE15})|sed "s|\.java||")
+export SEC_DEBUG="-Djava.security.debug=properties"
+$JAVA_HOME/bin/java ${SEC_DEBUG} ${PROG} true
+$JAVA_HOME/bin/java ${SEC_DEBUG} -Djava.security.disableSystemPropertiesFile=true ${PROG} false
 
 # Check java launcher has no SSB mitigation
 if ! nm $JAVA_HOME/bin/java | grep set_speculation ; then true ; else false; fi
@@ -2517,6 +2530,15 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Wed Jun 22 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-3
+- Update FIPS support to bring in latest changes
+- * RH2036462: sun.security.pkcs11.wrapper.PKCS11.getInstance breakage
+- * RH2090378: Revert to disabling system security properties and FIPS mode support together
+- Rebase RH1648249 nss.cfg patch so it applies after the FIPS patch
+- Enable system security properties in the RPM (now disabled by default in the FIPS repo)
+- Improve security properties test to check both enabled and disabled behaviour
+- Run security properties test with property debugging on
+
 * Sun Jun 12 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-2
 - Rebase FIPS patches from fips-17u branch and simplify by using a single patch from that repository
 - Rebase RH1648249 nss.cfg patch so it applies after the FIPS patch

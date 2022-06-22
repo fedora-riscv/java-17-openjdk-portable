@@ -1,5 +1,5 @@
 diff --git a/src/java.base/share/conf/security/java.security b/src/java.base/share/conf/security/java.security
-index 5a355e70cae..c730ea26ea2 100644
+index adfaf57d29e..abf89bbf327 100644
 --- a/src/java.base/share/conf/security/java.security
 +++ b/src/java.base/share/conf/security/java.security
 @@ -78,6 +78,7 @@ security.provider.tbd=SunMSCAPI
@@ -9,4 +9,4 @@ index 5a355e70cae..c730ea26ea2 100644
 +#security.provider.tbd=SunPKCS11 ${java.home}/lib/security/nss.cfg
  
  #
- # Security providers used when global crypto-policies are set to FIPS.
+ # Security providers used when FIPS mode support is active
