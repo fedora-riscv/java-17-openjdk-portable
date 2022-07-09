@@ -357,7 +357,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        1
-%global rpmrelease      4
+%global rpmrelease      5
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1152,6 +1152,8 @@ OrderWithRequires: copy-jdk-configs
 %endif
 # for printing support
 Requires: cups-libs
+# for system security properties
+Requires: crypto-policies
 # for FIPS PKCS11 provider
 Requires: nss
 # Post requires alternatives to install tool alternatives
@@ -1410,6 +1412,8 @@ BuildRequires: libXt-devel
 BuildRequires: libXtst-devel
 # Requirement for setting up nss.cfg and nss.fips.cfg
 BuildRequires: nss-devel
+# Requirement for system security property test
+BuildRequires: crypto-policies
 BuildRequires: pkgconfig
 BuildRequires: xorg-x11-proto-devel
 BuildRequires: zip
@@ -2610,6 +2614,9 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Thu Jul 14 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.5.ea
+- Explicitly require crypto-policies during build and runtime for system security properties
+
 * Thu Jul 14 2022 Jiri Vanek <jvanek@redhat.com> - 1:17.0.4.0.1-0.4.ea
 - Replaced binaries and .so files with bash-stubs on i686 in preparation of the removal on that architecture:
 - https://fedoraproject.org/wiki/Changes/Drop_i686_JDKs
