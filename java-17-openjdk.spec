@@ -309,7 +309,7 @@
 # New Version-String scheme-style defines
 %global featurever 17
 %global interimver 0
-%global updatever 3
+%global updatever 4
 %global patchver 0
 # If you bump featurever, you must also bump vendor_version_string
 # Used via new version scheme. JDK 17 was
@@ -339,8 +339,8 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        7
-%global rpmrelease      7
+%global buildver        1
+%global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -366,18 +366,18 @@
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
 # - N%%{?extraver}{?dist} for GA releases
-%global is_ga           1
+%global is_ga           0
 %if %{is_ga}
 %global build_type GA
-%global expected_ea_designator ""
+%global ea_designator ""
 %global ea_designator_zip ""
 %global extraver %{nil}
 %global eaprefix %{nil}
 %else
 %global build_type EA
-%global expected_ea_designator ea
-%global ea_designator_zip -%{expected_ea_designator}
-%global extraver .%{expected_ea_designator}
+%global ea_designator ea
+%global ea_designator_zip -%{ea_designator}
+%global extraver .%{ea_designator}
 %global eaprefix 0.
 %endif
 
@@ -1106,7 +1106,8 @@ Requires: ca-certificates
 # Require javapackages-filesystem for ownership of /usr/lib/jvm/ and macros
 Requires: javapackages-filesystem
 # Require zone-info data provided by tzdata-java sub-package
-Requires: tzdata-java >= 2015d
+# 2022a required as of JDK-8283350 in 17.0.4
+Requires: tzdata-java >= 2022a
 # for support of kernel stream control
 # libsctp.so.1 is being `dlopen`ed on demand
 Requires: lksctp-tools%{?_isa}
@@ -1346,8 +1347,6 @@ Patch1001: fips-17u-%{fipsver}.patch
 # OpenJDK patches in need of upstreaming
 #
 #############################################
-# JDK-8282004: x86_32.ad rules that call SharedRuntime helpers should have CALL effects
-Patch7: jdk8282004-x86_32-missing_call_effects.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -1385,7 +1384,8 @@ BuildRequires: java-%{buildjdkver}-openjdk-devel
 %ifarch %{zero_arches}
 BuildRequires: libffi-devel
 %endif
-BuildRequires: tzdata-java >= 2015d
+# 2022a required as of JDK-8283350 in 17.0.4
+BuildRequires: tzdata-java >= 2022a
 # Earlier versions have a bug in tree vectorization on PPC
 BuildRequires: gcc >= 4.8.3-8
 
@@ -1750,7 +1750,6 @@ pushd %{top_level_dir_name}
 %patch2 -p1
 %patch3 -p1
 %patch6 -p1
-%patch7 -p1
 # Add crypto policy and FIPS support
 %patch1001 -p1
 # nss.cfg PKCS11 support; must come last as it also alters java.security
@@ -1758,6 +1757,27 @@ pushd %{top_level_dir_name}
 popd # openjdk
 
 %patch600
+
+# The OpenJDK version file includes the current
+# upstream version information. For some reason,
+# configure does not automatically use the
+# default pre-version supplied there (despite
+# what the file claims), so we pass it manually
+# to configure
+VERSION_FILE=$(pwd)/%{top_level_dir_name}/make/conf/version-numbers.conf
+if [ -f ${VERSION_FILE} ] ; then
+    UPSTREAM_EA_DESIGNATOR=$(grep '^DEFAULT_PROMOTED_VERSION_PRE' ${VERSION_FILE} | cut -d '=' -f 2)
+else
+    echo "Could not find OpenJDK version file.";
+    exit 16
+fi
+if [ "x${UPSTREAM_EA_DESIGNATOR}" != "x%{ea_designator}" ] ; then
+    echo "WARNING: Designator mismatch";
+    echo "Spec file is configured for a %{build_type} build with designator '%{ea_designator}'"
+    echo "Upstream version-pre setting is '${UPSTREAM_EA_DESIGNATOR}'";
+    # Don't fail at present as upstream are not maintaining the value correctly
+    #exit 17
+fi
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -1855,31 +1875,13 @@ function buildjdk() {
     local top_dir_abs_src_path=$(pwd)/%{top_level_dir_name}
     local top_dir_abs_build_path=$(pwd)/${outputdir}
 
-    # The OpenJDK version file includes the current
-    # upstream version information. For some reason,
-    # configure does not automatically use the
-    # default pre-version supplied there (despite
-    # what the file claims), so we pass it manually
-    # to configure
-    VERSION_FILE=${top_dir_abs_src_path}/make/conf/version-numbers.conf
-    if [ -f ${VERSION_FILE} ] ; then
-      EA_DESIGNATOR=$(grep '^DEFAULT_PROMOTED_VERSION_PRE' ${VERSION_FILE} | cut -d '=' -f 2)
-    else
-      echo "Could not find OpenJDK version file.";
-      exit 16
-    fi
-    if [ "x${EA_DESIGNATOR}" != "x%{expected_ea_designator}" ] ; then
-      echo "Spec file is configured for a %{build_type} build, but upstream version-pre setting is ${EA_DESIGNATOR}";
-      exit 17
-    fi
-
     echo "Using output directory: ${outputdir}";
     echo "Checking build JDK ${buildjdk} is operational..."
     ${buildjdk}/bin/java -version
     echo "Using make targets: ${maketargets}"
     echo "Using debuglevel: ${debuglevel}"
     echo "Using link_opt: ${link_opt}"
-    echo "Building %{newjavaver}-%{buildver}, pre=${EA_DESIGNATOR}, opt=%{lts_designator}"
+    echo "Building %{newjavaver}-%{buildver}, pre=%{ea_designator}, opt=%{lts_designator}"
 
     mkdir -p ${outputdir}
     pushd ${outputdir}
@@ -1892,7 +1894,7 @@ function buildjdk() {
     --with-jobs=1 \
 %endif
     --with-version-build=%{buildver} \
-    --with-version-pre="${EA_DESIGNATOR}" \
+    --with-version-pre="%{ea_designator}" \
     --with-version-opt=%{lts_designator} \
     --with-vendor-version-string="%{vendor_version_string}" \
     --with-vendor-name="Red Hat, Inc." \
@@ -2119,6 +2121,9 @@ for suffix in %{build_loop} ; do
   installjdk ${top_dir_abs_main_build_path}/images/%{jdkimage}
   # Check debug symbols were built into the dynamic libraries
   debugcheckjdk ${top_dir_abs_main_build_path}/images/%{jdkimage}
+
+  # Print release information
+  cat ${top_dir_abs_main_build_path}/images/%{jdkimage}/release
 
 # build cycles
 done # end of release / debug cycle loop
@@ -2547,6 +2552,18 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Mon Jul 11 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.1.ea
+- Update to jdk-17.0.4.0+1
+- Update release notes to 17.0.4.0+1
+- Switch to EA mode for 17.0.4 pre-release builds.
+- Drop JDK-8282004 patch which is now upstreamed under JDK-8282231
+- Print release file during build, which should now include a correct SOURCE value from .src-rev
+- Update tarball script with IcedTea GitHub URL and .src-rev generation
+- Include script to generate bug list for release notes
+- Update tzdata requirement to 2022a to match JDK-8283350
+- Move EA designator check to prep so failures can be caught earlier
+- Make EA designator check non-fatal while upstream is not maintaining it
+
 * Thu Jul 07 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-7
 - Fix whitespace in spec file
 
