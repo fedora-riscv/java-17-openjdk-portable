@@ -356,8 +356,8 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        1
-%global rpmrelease      5
+%global buildver        7
+%global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -473,6 +473,9 @@
 %global tapsetdirttapset %{tapsetroot}/tapset/
 %global tapsetdir %{tapsetdirttapset}/%{stapinstall}
 %endif
+
+# x86 is no longer supported
+ExcludeArch: %{ix86}
 
 # not-duplicated scriptlets for normal/debug packages
 %global update_desktop_icons /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
@@ -2046,9 +2049,9 @@ function debugcheckjdk() {
                 IFS=$'\n'
                 for line in $(eu-readelf -s "$lib" | grep "00000000      0 FILE    LOCAL  DEFAULT")
                 do
-                    # We expect to see .cpp files, except for architectures like aarch64 and
+                    # We expect to see .cpp and .S files, except for architectures like aarch64 and
                     # s390 where we expect .o and .oS files
-                    echo "$line" | grep -E "ABS ((.*/)?[-_a-zA-Z0-9]+\.(c|cc|cpp|cxx|o|oS))?$"
+                    echo "$line" | grep -E "ABS ((.*/)?[-_a-zA-Z0-9]+\.(c|cc|cpp|cxx|o|S|oS))?$"
                 done
                 IFS="$old_IFS"
 
@@ -2614,6 +2617,12 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Sat Jul 16 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.7-0.1.ea
+- Update to jdk-17.0.3.0+7
+- Update release notes to 17.0.3.0+7
+- Exclude x86 from builds as the bootstrap JDK is now completely broken and unusable
+- Need to include the '.S' suffix in debuginfo checks after JDK-8284661
+
 * Thu Jul 14 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.5.ea
 - Explicitly require crypto-policies during build and runtime for system security properties
 
