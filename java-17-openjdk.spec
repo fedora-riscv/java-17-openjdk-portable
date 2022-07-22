@@ -356,8 +356,8 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        7
-%global rpmrelease      3
+%global buildver        8
+%global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -383,7 +383,7 @@
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
 # - N%%{?extraver}{?dist} for GA releases
-%global is_ga           0
+%global is_ga           1
 %if %{is_ga}
 %global build_type GA
 %global ea_designator ""
@@ -475,7 +475,11 @@
 %endif
 
 # x86 is no longer supported
+%if 0%{?java_arches:1}
 ExclusiveArch:  %{java_arches}
+%else
+ExcludeArch: %{ix86}
+%endif
 
 # not-duplicated scriptlets for normal/debug packages
 %global update_desktop_icons /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
@@ -2600,6 +2604,12 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Fri Jul 22 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.8-1
+- Update to jdk-17.0.3.0+8
+- Update release notes to 17.0.3.0+8
+- Switch to GA mode for release
+- Exclude x86 where java_arches is undefined, in order to unbreak build
+
 * Fri Jul 22 2022 Jiri Vanek <gnu.andrew@redhat.com> - 1:17.0.4.0.7-0.3.ea
 - moved to build only on %%{java_arches}
 -- https://fedoraproject.org/wiki/Changes/Drop_i686_JDKs

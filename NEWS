@@ -9,6 +9,16 @@ Live versions of these release notes can be found at:
   * https://bitly.com/openjdk1704
   * https://builds.shipilev.net/backports-monitor/release-notes-17.0.4.txt
 
+* Security fixes
+  - JDK-8272243: Improve DER parsing
+  - JDK-8272249: Better properties of loaded Properties
+  - JDK-8273056, JDK-8283875, CVE-2022-21549: java.util.random does not correctly sample exponential or Gaussian distributions
+  - JDK-8277608: Address IP Addressing
+  - JDK-8281859, CVE-2022-21540: Improve class compilation
+  - JDK-8281866, CVE-2022-21541: Enhance MethodHandle invocations
+  - JDK-8283190: Improve MIDI processing
+  - JDK-8284370: Improve zlib usage
+  - JDK-8285407, CVE-2022-34169: Improve Xalan supports
 * Other changes
   - JDK-8139173: [macosx] JInternalFrame shadow is not properly drawn
   - JDK-8181571: printing to CUPS fails on mac sandbox app
@@ -57,7 +67,6 @@ Live versions of these release notes can be found at:
   - JDK-8272493: Suboptimal code generation around Preconditions.checkIndex intrinsic with AVX2
   - JDK-8272908: Missing coverage for certain classes in com.sun.org.apache.xml.internal.security
   - JDK-8272964: java/nio/file/Files/InterruptCopy.java fails with java.lang.RuntimeException: Copy was not interrupted
-  - JDK-8273056: java.util.random does not correctly sample exponential or Gaussian distributions
   - JDK-8273095: vmTestbase/vm/mlvm/anonloader/stress/oome/heap/Test.java fails with "wrong OOME"
   - JDK-8273139: C2: assert(f <= 1 && f >= 0) failed: Incorrect frequency
   - JDK-8273142: Remove dependancy of TestHttpServer, HttpTransaction, HttpCallback from open/test/jdk/sun/net/www/protocol/http/ tests
