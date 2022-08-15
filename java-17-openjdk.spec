@@ -349,7 +349,7 @@
 # Define IcedTea version used for SystemTap tapsets and desktop file
 %global icedteaver      6.0.0pre00-c848b93a8598
 # Define current Git revision for the FIPS support patches
-%global fipsver f8142a23d0a
+%global fipsver bb46af07cb9
 
 # Standard JPackage naming and versioning defines
 %global origin          openjdk
@@ -357,7 +357,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        8
-%global rpmrelease      1
+%global rpmrelease      2
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1384,6 +1384,9 @@ Patch6: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-d
 # RH2094027: SunEC runtime permission for FIPS
 # RH2036462: sun.security.pkcs11.wrapper.PKCS11.getInstance breakage
 # RH2090378: Revert to disabling system security properties and FIPS mode support together
+# RH2104724: Avoid import/export of DH private keys
+# RH2092507: P11Key.getEncoded does not work for DH keys in FIPS mode
+# Build the systemconf library on all platforms
 Patch1001: fips-17u-%{fipsver}.patch
 
 #############################################
@@ -2604,6 +2607,12 @@ cjc.mainProgram(args)
 %endif
 
 %changelog
+* Mon Aug 15 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.8-2
+- Update FIPS support to bring in latest changes
+- * RH2104724: Avoid import/export of DH private keys
+- * RH2092507: P11Key.getEncoded does not work for DH keys in FIPS mode
+- * Build the systemconf library on all platforms
+
 * Fri Jul 22 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.8-1
 - Update to jdk-17.0.3.0+8
 - Update release notes to 17.0.3.0+8
