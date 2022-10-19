@@ -7,8 +7,22 @@ New in release OpenJDK 17.0.5 (2022-10-18):
 ===========================================
 Live versions of these release notes can be found at:
   * https://bitly.com/openjdk1705
-  * https://builds.shipilev.net/backports-monitor/release-notes-17.0.5.txt
+  * https://builds.shipilev.net/backports-monitor/release-notes-17.0.5.html
 
+* Security fixes
+  - JDK-8282252: Improve BigInteger/Decimal validation
+  - JDK-8285662: Better permission resolution
+  - JDK-8286077, CVE-2022-21618: Wider MultiByte conversions
+  - JDK-8286511: Improve macro allocation
+  - JDK-8286519: Better memory handling
+  - JDK-8286526, CVE-2022-21619: Improve NTLM support
+  - JDK-8286910, CVE-2022-21624: Improve JNDI lookups
+  - JDK-8286918, CVE-2022-21628: Better HttpServer service
+  - JDK-8287446: Enhance icon presentations
+  - JDK-8288508: Enhance ECDSA usage
+  - JDK-8289366, CVE-2022-39399: Improve HTTP/2 client usage
+  - JDK-8289853: Update HarfBuzz to 4.4.1
+  - JDK-8290334: Update FreeType to 2.12.1
 * Other changes
   - JDK-6782021: It is not possible to read local computer certificates with the SunMSCAPI provider
   - JDK-6854300: [TEST_BUG] java/awt/event/MouseEvent/SpuriousExitEnter/SpuriousExitEnter_3.java fails in jdk6u14 & jdk7
@@ -211,7 +225,6 @@ Live versions of these release notes can be found at:
   - JDK-8289695: [TESTBUG] TestMemoryAwareness.java fails on cgroups v2 and crun
   - JDK-8289697: buffer overflow in MTLVertexCache.m: MTLVertexCache_AddGlyphQuad
   - JDK-8289799: Build warning in methodData.cpp memset zero-length parameter
-  - JDK-8289853: Update HarfBuzz to 4.4.1
   - JDK-8289856: [PPC64] SIGSEGV in C2Compiler::init_c2_runtime() after JDK-8289060
   - JDK-8289910: unify os::message_box across posix platforms
   - JDK-8290000: Bump macOS GitHub actions to macOS 11
@@ -219,12 +232,12 @@ Live versions of these release notes can be found at:
   - JDK-8290020: Deadlock in leakprofiler::emit_events during shutdown
   - JDK-8290082: [PPC64] ZGC C2 load barrier stub needs to preserve vector registers
   - JDK-8290246: test fails "assert(init != __null) failed: initialization not found"
-  - JDK-8290334: Update FreeType to 2.12.1
   - JDK-8290417: CDS cannot archive lamda proxy with useImplMethodHandle
   - JDK-8290456: remove os::print_statistics()
   - JDK-8291595: [17u] Delete files missed in backport of 8269039
   - JDK-8291633: Build failures with GCC 11, Alpine 3 due to incompatible casts from nullptr
   - JDK-8292579: (tz) Update Timezone Data to 2022c
+  - JDK-8295056: [17u] Remove designator DEFAULT_PROMOTED_VERSION_PRE=ea for release 17.0.5
 
 Notes on individual issues:
 ===========================
