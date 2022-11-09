@@ -3,6 +3,187 @@ Key:
 JDK-X  - https://bugs.openjdk.java.net/browse/JDK-X
 CVE-XXXX-YYYY: https://cve.mitre.org/cgi-bin/cvename.cgi?name=XXXX-YYYY
 
+New in release OpenJDK 17.0.6 (2023-01-17):
+===========================================
+Live versions of these release notes can be found at:
+  * https://bitly.com/openjdk1706
+  * https://builds.shipilev.net/backports-monitor/release-notes-17.0.6.html
+
+* Other changes
+  - JDK-6829250: Reg test: java/awt/Toolkit/ScreenInsetsTest/ScreenInsetsTest.java fails in Windows
+  - JDK-7001973: java/awt/Graphics2D/CopyAreaOOB.java fails
+  - JDK-7188098: TEST_BUG: closed/javax/sound/midi/Synthesizer/Receiver/bug6186488.java fails
+  - JDK-8030121: java/awt/dnd/MissingDragExitEventTest/MissingDragExitEventTest.java fails
+  - JDK-8129827: [TEST_BUG] Test java/awt/Robot/RobotWheelTest/RobotWheelTest.java fails
+  - JDK-8159599: [TEST_BUG] java/awt/Modal/ModalInternalFrameTest/ModalInternalFrameTest.java
+  - JDK-8169187: [macosx] Aqua: java/awt/image/multiresolution/MultiresolutionIconTest.java
+  - JDK-8210558: serviceability/sa/TestJhsdbJstackLock.java fails to find '^\s+- waiting to lock <0x[0-9a-f]+> \(a java\.lang\.Class ...'
+  - JDK-8222323: ChildAlwaysOnTopTest.java fails with "RuntimeException: Failed to unset alwaysOnTop"
+  - JDK-8233557: [TESTBUG] DoubleClickTitleBarTest.java fails on macOs
+  - JDK-8233558: [TESTBUG] WindowOwnedByEmbeddedFrameTest.java fails on macos
+  - JDK-8233648: [TESTBUG] DefaultMenuBarTest.java failing on macos
+  - JDK-8244670: convert clhsdb "whatis" command from javascript to java
+  - JDK-8251466: test/java/io/File/GetXSpace.java fails on Windows with mapped network drives.
+  - JDK-8256811: Delayed/missed jdwp class unloading events
+  - JDK-8257722: Improve "keytool -printcert -jarfile" output
+  - JDK-8262721: Add Tests to verify single iteration loops are properly optimized
+  - JDK-8266082: AssertionError in Annotate.fromAnnotations with -Xdoclint
+  - JDK-8267138: Stray suffix when starting gtests via GTestWrapper.java
+  - JDK-8268033: compiler/intrinsics/bmi/verifycode/BzhiTestI2L.java fails with "fatal error: Not compilable at tier 3: CodeBuffer overflow"
+  - JDK-8268297: jdk/jfr/api/consumer/streaming/TestLatestEvent.java times out
+  - JDK-8268779: ZGC: runtime/InternalApi/ThreadCpuTimesDeadlock.java#id1 failed with "OutOfMemoryError: Java heap space"
+  - JDK-8269029: compiler/codegen/TestCharVect2.java fails for client VMs
+  - JDK-8269571: NMT should print total malloc bytes and invocation count
+  - JDK-8269743: test/hotspot/jtreg/vmTestbase/vm/mlvm/meth/stress/jni/nativeAndMH/Test.java crash with small heap (-Xmx50m)
+  - JDK-8270609: [TESTBUG] java/awt/print/Dialog/DialogCopies.java does not show instruction
+  - JDK-8270848: Redundant unsafe opmask register allocation in some instruction patterns.
+  - JDK-8270947: AArch64: C1: use zero_words to initialize all objects
+  - JDK-8271015: Split cds/SharedBaseAddress.java test into smaller parts
+  - JDK-8271956: AArch64: C1 build failed after JDK-8270947
+  - JDK-8272094: compiler/codecache/TestStressCodeBuffers.java crashes with "failed to allocate space for trampoline"
+  - JDK-8272123: Problem list 4 jtreg tests which regularly fail on macos-aarch64
+  - JDK-8272776: NullPointerException not reported
+  - JDK-8272791: java -XX:BlockZeroingLowLimit=1 crashes after 8270947
+  - JDK-8273043: [TEST_BUG] Automate NimbusJTreeSelTextColor.java
+  - JDK-8273236: keytool does not accurately warn about algorithms that are disabled but have additional constraints
+  - JDK-8273553: sun.security.ssl.SSLEngineImpl.closeInbound also has similar error of JDK-8253368
+  - JDK-8273578: javax/swing/JMenu/4515762/bug4515762.java fails on macOS 12
+  - JDK-8273881: Metaspace: test repeated deallocations
+  - JDK-8274032: Remove jtreg tag manual=yesno for java/awt/print/PrinterJob/ImagePrinting/ImageTypes.java & show test UI
+  - JDK-8274160: java/awt/Window/ShapedAndTranslucentWindows/Common.java delay is too high
+  - JDK-8274296: Update or Problem List tests which may fail with uiScale=2 on macOS
+  - JDK-8274563: jfr/event/oldobject/TestClassLoaderLeak.java fails when GC cycles are not happening
+  - JDK-8275170: Some jtreg sound tests should be marked with sound keyword
+  - JDK-8275234: java/awt/GraphicsDevice/DisplayModes/CycleDMImage.java is entered twice in ProblemList
+  - JDK-8275535: Retrying a failed authentication on multiple LDAP servers can lead to users blocked
+  - JDK-8276108: Wrong instruction generation in aarch64 backend
+  - JDK-8276904: Optional.toString() is unnecessarily expensive
+  - JDK-8277092: TestMetaspaceAllocationMT2.java#ndebug-default fails with "RuntimeException: Committed seems high: NNNN expected at most MMMM"
+  - JDK-8277346: ProblemList 7 serviceability/sa tests on macosx-x64
+  - JDK-8277351: ProblemList runtime/jni/checked/TestPrimitiveArrayCriticalWithBadParam.java on macosx-x64
+  - JDK-8277358: Accelerate CRC32-C
+  - JDK-8277411: C2 fast_unlock intrinsic on AArch64 has unnecessary ownership check
+  - JDK-8277576: ProblemList runtime/ErrorHandling/CreateCoredumpOnCrash.java on macosx-X64
+  - JDK-8277577: ProblemList compiler/onSpinWait/TestOnSpinWaitAArch64DefaultFlags.java on linux-aarch64
+  - JDK-8277578: ProblemList applications/jcstress/acqrel.java on linux-aarch64
+  - JDK-8277881: Missing SessionID in TLS1.3 resumption in compatibility mode
+  - JDK-8277928: Fix compilation on macosx-aarch64 after 8276108
+  - JDK-8279066: entries.remove(entry) is useless in PKCS12KeyStore
+  - JDK-8279398: jdk/jfr/api/recording/time/TestTimeMultiple.java failed with "RuntimeException: getStopTime() > afterStop"
+  - JDK-8279662: serviceability/sa/ClhsdbScanOops.java can fail due to unexpected GC
+  - JDK-8280124: Reduce branches decoding latin-1 chars from UTF-8 encoded bytes
+  - JDK-8280234: AArch64 "core" variant does not build after JDK-8270947
+  - JDK-8280511: AArch64: Combine shift and negate to a single instruction
+  - JDK-8280554: resourcehogs/serviceability/sa/ClhsdbRegionDetailsScanOopsForG1.java can fail if GC is triggered
+  - JDK-8280555: serviceability/sa/TestObjectMonitorIterate.java is failing due to ObjectMonitor referencing a null Object
+  - JDK-8280872: Reorder code cache segments to improve code density
+  - JDK-8280948: Write a regression test for JDK-4659800
+  - JDK-8281296: Create a regression test for JDK-4515999
+  - JDK-8282049: AArch64: Use ZR for integer zero immediate volatile stores
+  - JDK-8282276: Problem list failing two Robot Screen Capture tests
+  - JDK-8282347: AARCH64: Untaken branch in has_negatives stub
+  - JDK-8282402: Create a regression test for JDK-4666101
+  - JDK-8282528: AArch64: Incorrect replicate2L_zero rule
+  - JDK-8282642: vmTestbase/gc/gctests/LoadUnloadGC2/LoadUnloadGC2.java fails intermittently with exit code 1
+  - JDK-8282730: LdapLoginModule throw NPE from logout method after login failure
+  - JDK-8282777: Create a Regression test for JDK-4515031
+  - JDK-8282857: Create a regression test for JDK-4702690
+  - JDK-8283059: Uninitialized warning in check_code.c with GCC 11.2
+  - JDK-8283298: Make CodeCacheSegmentSize a product flag
+  - JDK-8283353: compiler/c2/cr6865031/Test.java and compiler/runtime/Test6826736.java fails on x86_32
+  - JDK-8283383: [macos] a11y : Screen magnifier shows extra characters (0) at the end JButton accessibility name
+  - JDK-8284681: compiler/c2/aarch64/TestFarJump.java fails with "RuntimeException: for CodeHeap < 250MB the far jump is expected to be encoded with a single branch instruction"
+  - JDK-8284690: [macos] VoiceOver : Getting java.lang.IllegalArgumentException: Invalid location on Editable JComboBox
+  - JDK-8284732: FFI_GO_CLOSURES macro not defined but required for zero build on Mac OS X
+  - JDK-8284752: Zero does not build on Mac OS X due to missing os::current_thread_enable_wx implementation
+  - JDK-8284771: java/util/zip/CloseInflaterDeflaterTest.java failed with "AssertionError: Expected IOException to be thrown, but nothing was thrown"
+  - JDK-8284892: java/net/httpclient/http2/TLSConnection.java fails intermittently
+  - JDK-8284980: Test vmTestbase/nsk/stress/except/except010.java times out with -Xcomp  -XX:+DeoptimizeALot
+  - JDK-8285305: Create an automated test for JDK-4495286
+  - JDK-8285373: Create an automated test for JDK-4702233
+  - JDK-8285612: Remove jtreg tag manual=yesno for java/awt/print/PrinterJob/ImagePrinting/ClippedImages.java
+  - JDK-8285687: Remove jtreg tag manual=yesno for java/awt/print/PrinterJob/PageRangesDlgTest.java
+  - JDK-8285698: Create a test to check the focus stealing of JPopupMenu from JComboBox
+  - JDK-8285836: sun/net/www/http/KeepAliveCache/KeepAliveProperty.java failed with "RuntimeException: Failed in server"
+  - JDK-8286263: compiler/c1/TestPinnedIntrinsics.java failed with "RuntimeException: testCurrentTimeMillis failed with -3"
+  - JDK-8286313: [macos] Voice over reads the boolean value as null in the JTable
+  - JDK-8286452: The array length of testSmallConstArray should be small and const
+  - JDK-8286460: Remove dependence on JAR filename in CDS tests
+  - JDK-8286551: JDK-8286460 causes tests to fail to compile in Tier2
+  - JDK-8286663: Resolve IDE warnings in WTrayIconPeer and SystemTray
+  - JDK-8286772: java/awt/dnd/DropTargetInInternalFrameTest/DropTargetInInternalFrameTest.html times out and fails in Windows
+  - JDK-8287076: Document.normalizeDocument() produces different results
+  - JDK-8287349: AArch64: Merge LDR instructions to improve C1 OSR performance
+  - JDK-8287425: Remove unnecessary register push for MacroAssembler::check_klass_subtype_slow_path
+  - JDK-8287609: macOS: SIGSEGV at [CoreFoundation] CFArrayGetCount / sun.font.CFont.getTableBytesNative
+  - JDK-8287826: javax/accessibility/4702233/AccessiblePropertiesTest.java fails to compile
+  - JDK-8288302: Shenandoah: SIGSEGV in vm maybe related to jit compiling xerces
+  - JDK-8288377: [REDO] DST not applying properly with zone id offset set with TZ env variable
+  - JDK-8288445: AArch64: C2 compilation fails with guarantee(!true || (true && (shift != 0))) failed: impossible encoding
+  - JDK-8288651: CDS test HelloUnload.java should not use literal string as ClassLoader name
+  - JDK-8289044: ARM32: missing LIR_Assembler::cmove metadata type support
+  - JDK-8289146: containers/docker/TestMemoryWithCgroupV1.java fails on linux ppc64le machine with missing Memory and Swap Limit output
+  - JDK-8289257: Some custom loader tests failed due to symbol refcount not decremented
+  - JDK-8289559: java/awt/a11y/AccessibleJPopupMenuTest.java test fails with java.lang.NullPointerException
+  - JDK-8289562: Change bugs.java.com and bugreport.java.com URL's to https
+  - JDK-8290207: Missing notice in dom.md
+  - JDK-8290209: jcup.md missing additional text
+  - JDK-8290451: Incorrect result when switching to C2 OSR compilation from C1
+  - JDK-8290529: C2: assert(BoolTest(btest).is_canonical()) failure
+  - JDK-8290532: Adjust PKCS11Exception and handle more PKCS11 error codes
+  - JDK-8290687: serviceability/sa/TestClassDump.java could leave files owned by root on macOS
+  - JDK-8290705: StringConcat::validate_mem_flow asserts with "unexpected user: StoreI"
+  - JDK-8290711: assert(false) failed: infinite loop in PhaseIterGVN::optimize
+  - JDK-8290781: Segfault at PhaseIdealLoop::clone_loop_handle_data_uses
+  - JDK-8290908: misc tests fail: assert(!thread->owns_locks()) failed: must release all locks when leaving VM
+  - JDK-8291456: com/sun/jdi/ClassUnloadEventTest.java failed with: Wrong number of class unload events: expected 10 got 4
+  - JDK-8291459: JVM crash with GenerateOopMap::error_work(char const*, __va_list_tag*)
+  - JDK-8291599: Assertion in PhaseIdealLoop::skeleton_predicate_has_opaque after JDK-8289127
+  - JDK-8291650: Add delay to ClassUnloadEventTest before exiting to give time for JVM to send all events before VMDeath
+  - JDK-8291775: C2: assert(r != __null && r->is_Region()) failed: this phi must have a region
+  - JDK-8292083: Detected container memory limit may exceed physical machine memory
+  - JDK-8292158: AES-CTR cipher state corruption with AVX-512
+  - JDK-8292385: assert(ctrl == kit.control()) failed: Control flow was added although the intrinsic bailed out
+  - JDK-8292541: [Metrics] Reported memory limit may exceed physical machine memory
+  - JDK-8292586: simplify cleanups in NTLMAuthSequence getCredentialsHandle
+  - JDK-8292682: Code change of JDK-8282730 not updated to reflect CSR update
+  - JDK-8292778: EncodingSupport_md.c convertUtf8ToPlatformString wrong placing of free
+  - JDK-8292816: GPL Classpath exception missing from assemblyprefix.h
+  - JDK-8292866: Java_sun_awt_shell_Win32ShellFolder2_getLinkLocation check MultiByteToWideChar return value for failures
+  - JDK-8292879: com/sun/jdi/ClassUnloadEventTest.java failed due to classes not unloading
+  - JDK-8292880: Improve debuggee logging for com/sun/jdi/ClassUnloadEventTest.java
+  - JDK-8292888: Bump update version for OpenJDK: jdk-17.0.6
+  - JDK-8292899: CustomTzIDCheckDST.java testcase failed on AIX platform
+  - JDK-8292903: enhance round_up_power_of_2 assertion output
+  - JDK-8293044: C1: Missing access check on non-accessible class
+  - JDK-8293232: Fix race condition in pkcs11 SessionManager
+  - JDK-8293319: [C2 cleanup] Remove unused other_path arg in Parse::adjust_map_after_if
+  - JDK-8293472: Incorrect container resource limit detection if manual cgroup fs mounts present
+  - JDK-8293489: Accept CAs with BasicConstraints without pathLenConstraint
+  - JDK-8293540: [Metrics] Incorrectly detected resource limits with additional cgroup fs mounts
+  - JDK-8293578: Duplicate ldc generated by javac
+  - JDK-8293657: sun/management/jmxremote/bootstrap/RmiBootstrapTest.java#id1 failed with "SSLHandshakeException: Remote host terminated the handshake"
+  - JDK-8293659: Improve UnsatisfiedLinkError error message to include dlopen error details
+  - JDK-8293672: Update freetype md file
+  - JDK-8293701: jdeps InverseDepsAnalyzer runs into NoSuchElementException: No value present
+  - JDK-8293808: mscapi destroyKeyContainer enhance KeyStoreException: Access is denied exception
+  - JDK-8293816: CI: ciBytecodeStream::get_klass() is not consistent
+  - JDK-8293826: Closed test fails after JDK-8276108 on aarch64
+  - JDK-8293828: JFR: jfr/event/oldobject/TestClassLoaderLeak.java still fails when GC cycles are not happening
+  - JDK-8293891: gc/g1/mixedgc/TestOldGenCollectionUsage.java (still) assumes that GCs take 1ms minimum
+  - JDK-8293998: [PPC64] JfrGetCallTrace: assert(_pc != nullptr) failed: must have PC
+  - JDK-8294357: (tz) Update Timezone Data to 2022d
+  - JDK-8294578: [PPC64] C2: Missing is_oop information when using disjoint compressed oops mode
+  - JDK-8294740: Add cgroups keyword to TestDockerBasic.java
+  - JDK-8294837: unify Windows 2019 version check in os_windows and java_props_md
+  - JDK-8294840: langtools OptionalDependencyTest.java use File.pathSeparator
+  - JDK-8295173: (tz) Update Timezone Data to 2022e
+  - JDK-8295288: Some vm_flags tests associate with a wrong BugID
+  - JDK-8295412: support latest VS2022 MSC_VER in abstract_vm_version.cpp
+  - JDK-8295429: Update harfbuzz md file
+  - JDK-8295469: S390X: Optimized builds are broken
+  - JDK-8295641: Fix DEFAULT_PROMOTED_VERSION_PRE=ea for -dev
+
 New in release OpenJDK 17.0.5 (2022-10-18):
 ===========================================
 Live versions of these release notes can be found at:
