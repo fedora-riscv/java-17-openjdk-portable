@@ -112,7 +112,7 @@
 
 # while JDK is a techpreview(is_system_jdk=0), some provides are turned off. Once jdk stops to be an techpreview, move it to 1
 # as sytem JDK, we mean any JDK which can run whole system java stack without issues (like bytecode issues, module issues, dependencies...)
-%global is_system_jdk 1
+%global is_system_jdk 0
 
 %global aarch64         aarch64 arm64 armv8
 # we need to distinguish between big and little endian PPC64
@@ -312,8 +312,9 @@
 %global stapinstall %{nil}
 %endif
 
+# always off for portable builds
 %ifarch %{systemtap_arches}
-%global with_systemtap 1
+%global with_systemtap 0
 %else
 %global with_systemtap 0
 %endif
@@ -493,797 +494,27 @@ ExclusiveArch:  %{java_arches}
 ExcludeArch: %{ix86}
 %endif
 
-# not-duplicated scriptlets for normal/debug packages
-%global update_desktop_icons /usr/bin/gtk-update-icon-cache %{_datadir}/icons/hicolor &>/dev/null || :
-
-%define save_alternatives() %{expand:
-  # warning! alternatives are localised!
-  # LANG=cs_CZ.UTF-8  alternatives --display java | head
-  # LANG=en_US.UTF-8  alternatives --display java | head
-  function nonLocalisedAlternativesDisplayOfMaster() {
-    LANG=en_US.UTF-8 alternatives --display "$MASTER"
-  }
-  function headOfAbove() {
-    nonLocalisedAlternativesDisplayOfMaster | head -n $1
-  }
-  MASTER="%{?1}"
-  LOCAL_LINK="%{?2}"
-  FAMILY="%{?3}"
-  rm -f %{_localstatedir}/lib/rpm-state/"$MASTER"_$FAMILY > /dev/null
-  if nonLocalisedAlternativesDisplayOfMaster > /dev/null ; then
-      if headOfAbove 1 | grep -q manual ; then
-        if headOfAbove 2 | tail -n 1 | grep -q %{compatiblename} ; then
-           headOfAbove 2  > %{_localstatedir}/lib/rpm-state/"$MASTER"_"$FAMILY"
-        fi
-      fi
-  fi
-}
-
-%define save_and_remove_alternatives() %{expand:
-  if [ "x$debug"  == "xtrue" ] ; then
-    set -x
-  fi
-  upgrade1_uninstal0=%{?3}
-  if [ "0$upgrade1_uninstal0" -gt 0 ] ; then # removal of this condition will cause persistence between uninstall
-    %{save_alternatives %{?1} %{?2} %{?4}}
-  fi
-  alternatives --remove  "%{?1}" "%{?2}"
-}
-
-%define set_if_needed_alternatives() %{expand:
-  MASTER="%{?1}"
-  FAMILY="%{?2}"
-  ALTERNATIVES_FILE="%{_localstatedir}/lib/rpm-state/$MASTER"_"$FAMILY"
-  if [ -e  "$ALTERNATIVES_FILE" ] ; then
-    rm "$ALTERNATIVES_FILE"
-    alternatives --set $MASTER $FAMILY
-  fi
-}
-
-
-%define post_script() %{expand:
-update-desktop-database %{_datadir}/applications &> /dev/null || :
-/bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
-exit 0
-}
-
-%define alternatives_java_install() %{expand:
-if [ "x$debug"  == "xtrue" ] ; then
-  set -x
-fi
-PRIORITY=%{priority}
-if [ "%{?1}" == %{debug_suffix} ]; then
-  let PRIORITY=PRIORITY-1
-fi
-
-ext=.gz
-key=java
-alternatives \\
-  --install %{_bindir}/java $key %{jrebindir -- %{?1}}/java $PRIORITY  --family %{family} \\
-  --slave %{_jvmdir}/jre jre %{_jvmdir}/%{sdkdir -- %{?1}} \\
-  --slave %{_bindir}/%{alt_java_name} %{alt_java_name} %{jrebindir -- %{?1}}/%{alt_java_name} \\
-  --slave %{_bindir}/keytool keytool %{jrebindir -- %{?1}}/keytool \\
-  --slave %{_bindir}/rmiregistry rmiregistry %{jrebindir -- %{?1}}/rmiregistry \\
-  --slave %{_mandir}/man1/java.1$ext java.1$ext \\
-  %{_mandir}/man1/java-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/%{alt_java_name}.1$ext %{alt_java_name}.1$ext \\
-  %{_mandir}/man1/%{alt_java_name}-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/keytool.1$ext keytool.1$ext \\
-  %{_mandir}/man1/keytool-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/rmiregistry.1$ext rmiregistry.1$ext \\
-  %{_mandir}/man1/rmiregistry-%{uniquesuffix -- %{?1}}.1$ext
-
-%{set_if_needed_alternatives $key %{family}}
-
-for X in %{origin} %{javaver} ; do
-  key=jre_"$X"
-  alternatives --install %{_jvmdir}/jre-"$X" $key %{_jvmdir}/%{sdkdir -- %{?1}} $PRIORITY --family %{family}
-  %{set_if_needed_alternatives $key %{family}}
-done
-
-key=jre_%{javaver}_%{origin}
-alternatives --install %{_jvmdir}/jre-%{javaver}-%{origin} $key %{_jvmdir}/%{jrelnk -- %{?1}} $PRIORITY  --family %{family}
-%{set_if_needed_alternatives $key %{family}}
-}
-
-%define post_headless() %{expand:
-%ifarch %{share_arches}
-%{jrebindir -- %{?1}}/java -Xshare:dump >/dev/null 2>/dev/null
-%endif
-
-update-desktop-database %{_datadir}/applications &> /dev/null || :
-/bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
-
-# see pretrans where this file is declared
-# also see that pretrans is only for non-debug
-if [ ! "%{?1}" == %{debug_suffix} ]; then
-  if [ -f %{_libexecdir}/copy_jdk_configs_fixFiles.sh ] ; then
-    sh  %{_libexecdir}/copy_jdk_configs_fixFiles.sh %{rpm_state_dir}/%{name}.%{_arch}  %{_jvmdir}/%{sdkdir -- %{?1}}
-  fi
-fi
-
-exit 0
-}
-
-%define postun_script() %{expand:
-update-desktop-database %{_datadir}/applications &> /dev/null || :
-if [ $1 -eq 0 ] ; then
-    /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null
-    %{update_desktop_icons}
-fi
-exit 0
-}
-
-
-%define postun_headless() %{expand:
-  if [ "x$debug"  == "xtrue" ] ; then
-    set -x
-  fi
-  post_state=$1 # from postun, https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_syntax
-  %{save_and_remove_alternatives  java  %{jrebindir -- %{?1}}/java $post_state %{family}}
-  %{save_and_remove_alternatives  jre_%{origin} %{_jvmdir}/%{sdkdir -- %{?1}} $post_state %{family}}
-  %{save_and_remove_alternatives  jre_%{javaver} %{_jvmdir}/%{sdkdir -- %{?1}} $post_state %{family}}
-  %{save_and_remove_alternatives  jre_%{javaver}_%{origin} %{_jvmdir}/%{jrelnk -- %{?1}} $post_state %{family}}
-}
-
-%define posttrans_script() %{expand:
-%{update_desktop_icons}
-}
-
-
-%define alternatives_javac_install() %{expand:
-if [ "x$debug"  == "xtrue" ] ; then
-  set -x
-fi
-PRIORITY=%{priority}
-if [ "%{?1}" == %{debug_suffix} ]; then
-  let PRIORITY=PRIORITY-1
-fi
-
-ext=.gz
-key=javac
-alternatives \\
-  --install %{_bindir}/javac $key %{sdkbindir -- %{?1}}/javac $PRIORITY  --family %{family} \\
-  --slave %{_jvmdir}/java java_sdk %{_jvmdir}/%{sdkdir -- %{?1}} \\
-  --slave %{_bindir}/jlink jlink %{sdkbindir -- %{?1}}/jlink \\
-  --slave %{_bindir}/jmod jmod %{sdkbindir -- %{?1}}/jmod \\
-%ifarch %{sa_arches}
-%ifnarch %{zero_arches}
-  --slave %{_bindir}/jhsdb jhsdb %{sdkbindir -- %{?1}}/jhsdb \\
-%endif
-%endif
-  --slave %{_bindir}/jar jar %{sdkbindir -- %{?1}}/jar \\
-  --slave %{_bindir}/jarsigner jarsigner %{sdkbindir -- %{?1}}/jarsigner \\
-  --slave %{_bindir}/javadoc javadoc %{sdkbindir -- %{?1}}/javadoc \\
-  --slave %{_bindir}/javap javap %{sdkbindir -- %{?1}}/javap \\
-  --slave %{_bindir}/jcmd jcmd %{sdkbindir -- %{?1}}/jcmd \\
-  --slave %{_bindir}/jconsole jconsole %{sdkbindir -- %{?1}}/jconsole \\
-  --slave %{_bindir}/jdb jdb %{sdkbindir -- %{?1}}/jdb \\
-  --slave %{_bindir}/jdeps jdeps %{sdkbindir -- %{?1}}/jdeps \\
-  --slave %{_bindir}/jdeprscan jdeprscan %{sdkbindir -- %{?1}}/jdeprscan \\
-  --slave %{_bindir}/jfr jfr %{sdkbindir -- %{?1}}/jfr \\
-  --slave %{_bindir}/jimage jimage %{sdkbindir -- %{?1}}/jimage \\
-  --slave %{_bindir}/jinfo jinfo %{sdkbindir -- %{?1}}/jinfo \\
-  --slave %{_bindir}/jmap jmap %{sdkbindir -- %{?1}}/jmap \\
-  --slave %{_bindir}/jps jps %{sdkbindir -- %{?1}}/jps \\
-  --slave %{_bindir}/jpackage jpackage %{sdkbindir -- %{?1}}/jpackage \\
-  --slave %{_bindir}/jrunscript jrunscript %{sdkbindir -- %{?1}}/jrunscript \\
-  --slave %{_bindir}/jshell jshell %{sdkbindir -- %{?1}}/jshell \\
-  --slave %{_bindir}/jstack jstack %{sdkbindir -- %{?1}}/jstack \\
-  --slave %{_bindir}/jstat jstat %{sdkbindir -- %{?1}}/jstat \\
-  --slave %{_bindir}/jstatd jstatd %{sdkbindir -- %{?1}}/jstatd \\
-  --slave %{_bindir}/serialver serialver %{sdkbindir -- %{?1}}/serialver \\
-  --slave %{_mandir}/man1/jar.1$ext jar.1$ext \\
-  %{_mandir}/man1/jar-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jarsigner.1$ext jarsigner.1$ext \\
-  %{_mandir}/man1/jarsigner-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/javac.1$ext javac.1$ext \\
-  %{_mandir}/man1/javac-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/javadoc.1$ext javadoc.1$ext \\
-  %{_mandir}/man1/javadoc-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/javap.1$ext javap.1$ext \\
-  %{_mandir}/man1/javap-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jcmd.1$ext jcmd.1$ext \\
-  %{_mandir}/man1/jcmd-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jconsole.1$ext jconsole.1$ext \\
-  %{_mandir}/man1/jconsole-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jdb.1$ext jdb.1$ext \\
-  %{_mandir}/man1/jdb-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jdeps.1$ext jdeps.1$ext \\
-  %{_mandir}/man1/jdeps-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jinfo.1$ext jinfo.1$ext \\
-  %{_mandir}/man1/jinfo-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jmap.1$ext jmap.1$ext \\
-  %{_mandir}/man1/jmap-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jps.1$ext jps.1$ext \\
-  %{_mandir}/man1/jps-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jpackage.1$ext jpackage.1$ext \\
-  %{_mandir}/man1/jpackage-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jrunscript.1$ext jrunscript.1$ext \\
-  %{_mandir}/man1/jrunscript-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jstack.1$ext jstack.1$ext \\
-  %{_mandir}/man1/jstack-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jstat.1$ext jstat.1$ext \\
-  %{_mandir}/man1/jstat-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/jstatd.1$ext jstatd.1$ext \\
-  %{_mandir}/man1/jstatd-%{uniquesuffix -- %{?1}}.1$ext \\
-  --slave %{_mandir}/man1/serialver.1$ext serialver.1$ext \\
-  %{_mandir}/man1/serialver-%{uniquesuffix -- %{?1}}.1$ext
-
-%{set_if_needed_alternatives  $key %{family}}
-
-for X in %{origin} %{javaver} ; do
-  key=java_sdk_"$X"
-  alternatives --install %{_jvmdir}/java-"$X" $key %{_jvmdir}/%{sdkdir -- %{?1}} $PRIORITY  --family %{family}
-  %{set_if_needed_alternatives  $key %{family}}
-done
-
-key=java_sdk_%{javaver}_%{origin}
-alternatives --install %{_jvmdir}/java-%{javaver}-%{origin} $key %{_jvmdir}/%{sdkdir -- %{?1}} $PRIORITY  --family %{family}
-%{set_if_needed_alternatives  $key %{family}}
-}
-
-%define post_devel() %{expand:
-update-desktop-database %{_datadir}/applications &> /dev/null || :
-/bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null || :
-
-exit 0
-}
-
-%define postun_devel() %{expand:
-  if [ "x$debug"  == "xtrue" ] ; then
-    set -x
-  fi
-  post_state=$1 # from postun, https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_syntax
-  %{save_and_remove_alternatives  javac %{sdkbindir -- %{?1}}/javac $post_state %{family}}
-  %{save_and_remove_alternatives  java_sdk_%{origin} %{_jvmdir}/%{sdkdir -- %{?1}} $post_state %{family}}
-  %{save_and_remove_alternatives  java_sdk_%{javaver} %{_jvmdir}/%{sdkdir -- %{?1}} $post_state %{family}}
-  %{save_and_remove_alternatives  java_sdk_%{javaver}_%{origin} %{_jvmdir}/%{sdkdir -- %{?1}} $post_state %{family}}
-
-update-desktop-database %{_datadir}/applications &> /dev/null || :
-
-if [ $1 -eq 0 ] ; then
-    /bin/touch --no-create %{_datadir}/icons/hicolor &>/dev/null
-    %{update_desktop_icons}
-fi
-exit 0
-}
-
-%define posttrans_devel() %{expand:
-%{alternatives_javac_install --  %{?1}}
-%{update_desktop_icons}
-}
-
-%define alternatives_javadoc_install() %{expand:
-if [ "x$debug"  == "xtrue" ] ; then
-  set -x
-fi
-PRIORITY=%{priority}
-if [ "%{?1}" == %{debug_suffix} ]; then
-  let PRIORITY=PRIORITY-1
-fi
-  for X in %{origin} %{javaver} ; do
-    key=javadocdir_"$X"
-    alternatives --install %{_javadocdir}/java-"$X" $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $PRIORITY --family %{family_noarch}
-    %{set_if_needed_alternatives $key %{family_noarch}}
-  done
-
-  key=javadocdir_%{javaver}_%{origin}
-  alternatives --install %{_javadocdir}/java-%{javaver}-%{origin} $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $PRIORITY --family %{family_noarch}
-  %{set_if_needed_alternatives  $key %{family_noarch}}
-
-  key=javadocdir
-  alternatives --install %{_javadocdir}/java $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $PRIORITY --family %{family_noarch}
-  %{set_if_needed_alternatives  $key %{family_noarch}}
-exit 0
-}
-
-%define postun_javadoc() %{expand:
-if [ "x$debug"  == "xtrue" ] ; then
-  set -x
-fi
-  post_state=$1 # from postun, https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_syntax
-  %{save_and_remove_alternatives  javadocdir  %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadocdir_%{origin} %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadocdir_%{javaver} %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadocdir_%{javaver}_%{origin} %{_javadocdir}/%{uniquejavadocdir -- %{?1}}/api $post_state %{family_noarch}}
-exit 0
-}
-
-%define alternatives_javadoczip_install() %{expand:
-if [ "x$debug"  == "xtrue" ] ; then
-  set -x
-fi
-PRIORITY=%{priority}
-if [ "%{?1}" == %{debug_suffix} ]; then
-  let PRIORITY=PRIORITY-1
-fi
-  for X in %{origin} %{javaver} ; do
-    key=javadoczip_"$X"
-    alternatives --install %{_javadocdir}/java-"$X".zip $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $PRIORITY --family %{family_noarch}
-    %{set_if_needed_alternatives $key %{family_noarch}}
-  done
-
-  key=javadoczip_%{javaver}_%{origin}
-  alternatives --install %{_javadocdir}/java-%{javaver}-%{origin}.zip $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $PRIORITY --family %{family_noarch}
-  %{set_if_needed_alternatives  $key %{family_noarch}}
-
-  # Weird legacy filename for backwards-compatibility
-  key=javadoczip
-  alternatives --install %{_javadocdir}/java-zip $key %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $PRIORITY  --family %{family_noarch}
-  %{set_if_needed_alternatives  $key %{family_noarch}}
-exit 0
-}
-
-%define postun_javadoc_zip() %{expand:
-  if [ "x$debug"  == "xtrue" ] ; then
-    set -x
-  fi
-  post_state=$1 # from postun, https://docs.fedoraproject.org/en-US/packaging-guidelines/Scriptlets/#_syntax
-  %{save_and_remove_alternatives  javadoczip  %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadoczip_%{origin}  %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadoczip_%{javaver}  %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $post_state %{family_noarch}}
-  %{save_and_remove_alternatives  javadoczip_%{javaver}_%{origin}  %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip $post_state %{family_noarch}}
-exit 0
-}
-
-%define files_jre() %{expand:
-%{_datadir}/icons/hicolor/*x*/apps/java-%{javaver}-%{origin}.png
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libsplashscreen.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libawt_xawt.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjawt.so
-}
-
-
-%define files_jre_headless() %{expand:
-%license %{_jvmdir}/%{sdkdir -- %{?1}}/legal
-%doc %{_defaultdocdir}/%{uniquejavadocdir -- %{?1}}/NEWS
-%dir %{_sysconfdir}/.java/.systemPrefs
-%dir %{_sysconfdir}/.java
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}
-%{_jvmdir}/%{sdkdir -- %{?1}}/release
-%{_jvmdir}/%{jrelnk -- %{?1}}
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/bin
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/java
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/%{alt_java_name}
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/keytool
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/rmiregistry
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/lib
-%ifarch %{jit_arches}
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/classlist
-%endif
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jexec
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jspawnhelper
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jrt-fs.jar
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/modules
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/psfont.properties.ja
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/psfontj2d.properties
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/tzdb.dat
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/tzdb.dat.upstream
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjli.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jvm.cfg
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libattach.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libawt.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libextnet.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjsig.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libawt_headless.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libdt_socket.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libfontmanager.so
-%if ! %{system_libs}
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libfreetype.so
-%endif
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libinstrument.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libj2gss.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libj2pcsc.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libj2pkcs11.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjaas.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjava.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjavajpeg.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjdwp.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjimage.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjsound.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/liblcms.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libmanagement.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libmanagement_agent.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libmanagement_ext.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libmlib_image.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libnet.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libnio.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libprefs.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/librmi.so
-# Some architectures don't have the serviceability agent
-%ifarch %{sa_arches}
-%ifnarch %{zero_arches}
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libsaproc.so
-%endif
-%endif
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libsctp.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libsystemconf.so
-%ifarch %{svml_arches}
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libjsvml.so
-%endif
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libsyslookup.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libverify.so
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/libzip.so
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/lib/jfr
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jfr/default.jfc
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/jfr/profile.jfc
-%{_mandir}/man1/java-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/%{alt_java_name}-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/keytool-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/rmiregistry-%{uniquesuffix -- %{?1}}.1*
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/server/
-%ifarch %{share_arches}
-%attr(444, root, root) %ghost %{_jvmdir}/%{sdkdir -- %{?1}}/lib/server/classes.jsa
-%endif
-%dir %{etcjavasubdir}
-%dir %{etcjavadir -- %{?1}}
-%dir %{etcjavadir -- %{?1}}/lib
-%dir %{etcjavadir -- %{?1}}/lib/security
-%{etcjavadir -- %{?1}}/lib/security/cacerts
-%{etcjavadir -- %{?1}}/lib/security/cacerts.upstream
-%dir %{etcjavadir -- %{?1}}/conf
-%dir %{etcjavadir -- %{?1}}/conf/sdp
-%dir %{etcjavadir -- %{?1}}/conf/management
-%dir %{etcjavadir -- %{?1}}/conf/security
-%dir %{etcjavadir -- %{?1}}/conf/security/policy
-%dir %{etcjavadir -- %{?1}}/conf/security/policy/limited
-%dir %{etcjavadir -- %{?1}}/conf/security/policy/unlimited
-%config(noreplace) %{etcjavadir -- %{?1}}/lib/security/default.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/lib/security/blocked.certs
-%config(noreplace) %{etcjavadir -- %{?1}}/lib/security/public_suffix_list.dat
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/policy/limited/exempt_local.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/policy/limited/default_local.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/policy/limited/default_US_export.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/policy/unlimited/default_local.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/policy/unlimited/default_US_export.policy
- %{etcjavadir -- %{?1}}/conf/security/policy/README.txt
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/java.policy
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/java.security
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/logging.properties
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/nss.cfg
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/security/nss.fips.cfg
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/management/jmxremote.access
-# This is a config template, thus not config-noreplace
-%config  %{etcjavadir -- %{?1}}/conf/management/jmxremote.password.template
-%config  %{etcjavadir -- %{?1}}/conf/sdp/sdp.conf.template
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/management/management.properties
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/net.properties
-%config(noreplace) %{etcjavadir -- %{?1}}/conf/sound.properties
-%{_jvmdir}/%{sdkdir -- %{?1}}/conf
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/security
-%if %is_system_jdk
-%if %{is_release_build -- %{?1}}
-%ghost %{_bindir}/java
-%ghost %{_bindir}/%{alt_java_name}
-%ghost %{_jvmdir}/jre
-%ghost %{_bindir}/keytool
-%ghost %{_bindir}/pack200
-%ghost %{_bindir}/rmid
-%ghost %{_bindir}/rmiregistry
-%ghost %{_bindir}/unpack200
-%ghost %{_jvmdir}/jre-%{origin}
-%ghost %{_jvmdir}/jre-%{javaver}
-%ghost %{_jvmdir}/jre-%{javaver}-%{origin}
-%endif
-%endif
-# https://bugzilla.redhat.com/show_bug.cgi?id=1820172
-# https://docs.fedoraproject.org/en-US/packaging-guidelines/Directory_Replacement/
-%ghost %{_jvmdir}/%{sdkdir -- %{?1}}/conf.rpmmoved
-%ghost %{_jvmdir}/%{sdkdir -- %{?1}}/lib/security.rpmmoved
-}
-
-%define files_devel() %{expand:
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/bin
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jar
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jarsigner
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/javac
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/javadoc
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/javap
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jconsole
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jcmd
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jdb
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jdeps
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jdeprscan
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jfr
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jimage
-# Some architectures don't have the serviceability agent
-%ifarch %{sa_arches}
-%ifnarch %{zero_arches}
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jhsdb
-%{_mandir}/man1/jhsdb-%{uniquesuffix -- %{?1}}.1*
-%endif
-%endif
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jinfo
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jlink
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jmap
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jmod
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jps
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jpackage
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jrunscript
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jshell
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jstack
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jstat
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/jstatd
-%{_jvmdir}/%{sdkdir -- %{?1}}/bin/serialver
-%{_jvmdir}/%{sdkdir -- %{?1}}/include
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/ct.sym
-%if %{with_systemtap}
-%{_jvmdir}/%{sdkdir -- %{?1}}/tapset
-%endif
-%{_datadir}/applications/*jconsole%{?1}.desktop
-%{_mandir}/man1/jar-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jarsigner-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/javac-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/javadoc-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/javap-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jconsole-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jcmd-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jdb-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jdeps-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jinfo-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jmap-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jps-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jpackage-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jrunscript-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jstack-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jstat-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jstatd-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/serialver-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jdeprscan-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jlink-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jmod-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jshell-%{uniquesuffix -- %{?1}}.1*
-%{_mandir}/man1/jfr-%{uniquesuffix -- %{?1}}.1*
-
-%if %{with_systemtap}
-%dir %{tapsetroot}
-%dir %{tapsetdirttapset}
-%dir %{tapsetdir}
-%{tapsetdir}/*%{_arch}%{?1}.stp
-%endif
-%if %is_system_jdk
-%if %{is_release_build -- %{?1}}
-%ghost %{_bindir}/javac
-%ghost %{_jvmdir}/java
-%ghost %{_jvmdir}/%{alt_java_name}
-%ghost %{_bindir}/jlink
-%ghost %{_bindir}/jmod
-%ghost %{_bindir}/jhsdb
-%ghost %{_bindir}/jar
-%ghost %{_bindir}/jarsigner
-%ghost %{_bindir}/javadoc
-%ghost %{_bindir}/javap
-%ghost %{_bindir}/jcmd
-%ghost %{_bindir}/jconsole
-%ghost %{_bindir}/jdb
-%ghost %{_bindir}/jdeps
-%ghost %{_bindir}/jdeprscan
-%ghost %{_bindir}/jimage
-%ghost %{_bindir}/jinfo
-%ghost %{_bindir}/jmap
-%ghost %{_bindir}/jps
-%ghost %{_bindir}/jrunscript
-%ghost %{_bindir}/jshell
-%ghost %{_bindir}/jstack
-%ghost %{_bindir}/jstat
-%ghost %{_bindir}/jstatd
-%ghost %{_bindir}/serialver
-%ghost %{_jvmdir}/java-%{origin}
-%ghost %{_jvmdir}/java-%{javaver}
-%ghost %{_jvmdir}/java-%{javaver}-%{origin}
-%endif
-%endif
-}
-
-%define files_jmods() %{expand:
-%{_jvmdir}/%{sdkdir -- %{?1}}/jmods
-}
-
-%define files_demo() %{expand:
-%license %{_jvmdir}/%{sdkdir -- %{?1}}/legal
-%{_jvmdir}/%{sdkdir -- %{?1}}/demo
-%{_jvmdir}/%{sdkdir -- %{?1}}/sample
-}
-
-%define files_src() %{expand:
-%license %{_jvmdir}/%{sdkdir -- %{?1}}/legal
-%{_jvmdir}/%{sdkdir -- %{?1}}/lib/src.zip
-}
-
-%define files_static_libs() %{expand:
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/%{static_libs_root}
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/%{static_libs_arch_dir}
-%dir %{_jvmdir}/%{sdkdir -- %{?1}}/%{static_libs_install_dir}
-%{_jvmdir}/%{sdkdir -- %{?1}}/%{static_libs_install_dir}/lib*.a
-}
-
-%define files_javadoc() %{expand:
-%doc %{_javadocdir}/%{uniquejavadocdir -- %{?1}}
-%license %{_jvmdir}/%{sdkdir -- %{?1}}/legal
-%if %is_system_jdk
-%if %{is_release_build -- %{?1}}
-%ghost %{_javadocdir}/java
-%ghost %{_javadocdir}/java-%{origin}
-%ghost %{_javadocdir}/java-%{javaver}
-%ghost %{_javadocdir}/java-%{javaver}-%{origin}
-%endif
-%endif
-}
-
-%define files_javadoc_zip() %{expand:
-%doc %{_javadocdir}/%{uniquejavadocdir -- %{?1}}.zip
-%license %{_jvmdir}/%{sdkdir -- %{?1}}/legal
-%if %is_system_jdk
-%if %{is_release_build -- %{?1}}
-%ghost %{_javadocdir}/java-zip
-%ghost %{_javadocdir}/java-%{origin}.zip
-%ghost %{_javadocdir}/java-%{javaver}.zip
-%ghost %{_javadocdir}/java-%{javaver}-%{origin}.zip
-%endif
-%endif
-}
-
+# Portables have no rpo (requires/provides), but thsoe are awesome for orientation in spec
+# also scriptlets are hapily missing and files are handled old fashion
 # not-duplicated requires/provides/obsoletes for normal/debug packages
 %define java_rpo() %{expand:
-Requires: fontconfig%{?_isa}
-Requires: xorg-x11-fonts-Type1
-# Require libXcomposite explicitly since it's only dynamically loaded
-# at runtime. Fixes screenshot issues. See JDK-8150954.
-Requires: libXcomposite%{?_isa}
-# Requires rest of java
-Requires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-# for java-X-openjdk package's desktop binding
-# Where recommendations are available, recommend Gtk+ for the Swing look and feel
-%if 0%{?rhel} >= 8 || 0%{?fedora} > 0
-Recommends: gtk3%{?_isa}
-%endif
-
-Provides: java-%{javaver}-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-
-# Standard JPackage base provides
-Provides: jre-%{javaver}%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre-%{javaver}-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre%{?1} = %{epoch}:%{version}-%{release}
-%endif
-}
-
-%define java_headless_rpo() %{expand:
-# Require /etc/pki/java/cacerts
-Requires: ca-certificates
-# Require javapackages-filesystem for ownership of /usr/lib/jvm/ and macros
-Requires: javapackages-filesystem
-# Require zone-info data provided by tzdata-java sub-package
-# 2022e required as of JDK-8295173
-Requires: tzdata-java >= 2022e
-# for support of kernel stream control
-# libsctp.so.1 is being `dlopen`ed on demand
-Requires: lksctp-tools%{?_isa}
-%if ! 0%{?flatpak}
-# tool to copy jdk's configs - should be Recommends only, but then only dnf/yum enforce it,
-# not rpm transaction and so no configs are persisted when pure rpm -u is run. It may be
-# considered as regression
-Requires: copy-jdk-configs >= 4.0
-OrderWithRequires: copy-jdk-configs
-%endif
-# for printing support
-Requires: cups-libs
-# for system security properties
-Requires: crypto-policies
-# for FIPS PKCS11 provider
-Requires: nss
-# Post requires alternatives to install tool alternatives
-Requires(post):   %{alternatives_requires}
-# Postun requires alternatives to uninstall tool alternatives
-Requires(postun): %{alternatives_requires}
-# Where suggestions are available, recommend the sctp and pcsc libraries
-# for optional support of kernel stream control and card reader
-%if 0%{?rhel} >= 8 || 0%{?fedora} > 0
-Suggests: lksctp-tools%{?_isa}, pcsc-lite-libs%{?_isa}
-%endif
-
-# Standard JPackage base provides
-Provides: jre-%{javaver}-%{origin}-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre-%{javaver}-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-headless%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-%{origin}-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre-%{origin}-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: jre-headless%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-headless%{?1} = %{epoch}:%{version}-%{release}
-%endif
 }
 
 %define java_devel_rpo() %{expand:
-# Requires base package
-Requires:         %{name}%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-# Post requires alternatives to install tool alternatives
-Requires(post):   %{alternatives_requires}
-# Postun requires alternatives to uninstall tool alternatives
-Requires(postun): %{alternatives_requires}
-
-# Standard JPackage devel provides
-Provides: java-sdk-%{javaver}-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-sdk-%{javaver}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-devel%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-devel%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-devel-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-sdk-%{origin}%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-devel%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-sdk%{?1} = %{epoch}:%{version}-%{release}
-%endif
 }
 
 %define java_static_libs_rpo() %{expand:
-Requires:         %{name}-devel%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
 }
 
-%define java_jmods_rpo() %{expand:
-# Requires devel package
-# as jmods are bytecode, they should be OK without any _isa
-Requires:         %{name}-devel%{?1} = %{epoch}:%{version}-%{release}
-OrderWithRequires: %{name}-headless%{?1} = %{epoch}:%{version}-%{release}
-
-Provides: java-%{javaver}-jmods%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-jmods%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-jmods%{?1} = %{epoch}:%{version}-%{release}
-%endif
-}
-
-%define java_demo_rpo() %{expand:
-Requires: %{name}%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-
-Provides: java-%{javaver}-demo%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-demo%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-demo%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{origin}-demo%{?1} = %{epoch}:%{version}-%{release}
-%endif
-}
-
-%define java_javadoc_rpo() %{expand:
-OrderWithRequires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-# Post requires alternatives to install javadoc alternative
-Requires(post):   %{alternatives_requires}
-# Postun requires alternatives to uninstall javadoc alternative
-Requires(postun): %{alternatives_requires}
-
-# Standard JPackage javadoc provides
-Provides: java-%{javaver}-javadoc%{?1}%{?2} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-javadoc%{?1}%{?2} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-javadoc%{?1}%{?2} = %{epoch}:%{version}-%{release}
-%endif
-}
-
-%define java_src_rpo() %{expand:
-Requires: %{name}-headless%{?1}%{?_isa} = %{epoch}:%{version}-%{release}
-
-# Standard JPackage sources provides
-Provides: java-%{javaver}-src%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{javaver}-%{origin}-src%{?1} = %{epoch}:%{version}-%{release}
-%if %is_system_jdk
-Provides: java-src%{?1} = %{epoch}:%{version}-%{release}
-Provides: java-%{origin}-src%{?1} = %{epoch}:%{version}-%{release}
-%endif
-}
 
 # Prevent brp-java-repack-jars from being run
 %global __jar_repack 0
 
-Name:    java-17-%{origin}
+# portables have grown out of its component, moving back to java-x-vendor
+# this expression, when declared as global, filled component with java-x-vendor portable
+%define component %(echo %{name} | sed "s;-portable;;g")
+
+Name:    java-%{javaver}-%{origin}-portable
 Version: %{newjavaver}.%{buildver}
 Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
@@ -1297,7 +528,7 @@ Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # provides >= 1.6.0 must specify the epoch, "java >= 1:1.6.0".
 
 Epoch:   1
-Summary: %{origin_nice} %{featurever} Runtime Environment
+Summary: %{origin_nice} %{featurever} Runtime Environment portable edition
 # Groups are only used up to RHEL 8 and on Fedora versions prior to F30
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
@@ -1327,10 +558,12 @@ Source0: openjdk-jdk%{featurever}u-%{vcstag}.tar.xz
 # Use 'icedtea_sync.sh' to update the following
 # They are based on code contained in the IcedTea project (6.x).
 # Systemtap tapsets. Zipped up to keep it small.
-Source8: tapsets-icedtea-%{icedteaver}.tar.xz
+# Disabled in portables
+#Source8: tapsets-icedtea-%%{icedteaver}.tar.xz
 
 # Desktop files. Adapted from IcedTea
-Source9: jconsole.desktop.in
+# Disabled in portables
+#Source9: jconsole.desktop.in
 
 # Release notes
 Source10: NEWS
@@ -1339,7 +572,8 @@ Source10: NEWS
 Source11: nss.cfg.in
 
 # Removed libraries that we link instead
-Source12: remove-intree-libraries.sh
+# Disabled in portables
+#Source12: remove-intree-libraries.sh
 
 # Ensure we aren't using the limited crypto policy
 Source13: TestCryptoLevel.java
@@ -1494,78 +728,37 @@ BuildRequires: libstdc++-static
 %{java_rpo %{nil}}
 
 %description
-The %{origin_nice} %{featurever} runtime environment.
+The %{origin_nice} %{featurever} runtime environment - portable edition.
 
 %if %{include_debug_build}
 %package slowdebug
-Summary: %{origin_nice} %{featurever} Runtime Environment %{debug_on}
+Summary: %{origin_nice} %{featurever} Runtime Environment portable edition %{debug_on}
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
 %{java_rpo -- %{debug_suffix_unquoted}}
 %description slowdebug
-The %{origin_nice} %{featurever} runtime environment.
+The %{origin_nice} %{featurever} runtime environment - portable edition.
 %{debug_warning}
 %endif
 
 %if %{include_fastdebug_build}
 %package fastdebug
-Summary: %{origin_nice} %{featurever} Runtime Environment %{fastdebug_on}
+Summary: %{origin_nice} %{featurever} Runtime Environment portable edition %{fastdebug_on}
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
 
 %{java_rpo -- %{fastdebug_suffix_unquoted}}
 %description fastdebug
-The %{origin_nice} %{featurever} runtime environment.
-%{fastdebug_warning}
-%endif
-
-%if %{include_normal_build}
-%package headless
-Summary: %{origin_nice} %{featurever} Headless Runtime Environment
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_headless_rpo %{nil}}
-
-%description headless
-The %{origin_nice} %{featurever} runtime environment without audio and video support.
-%endif
-
-%if %{include_debug_build}
-%package headless-slowdebug
-Summary: %{origin_nice} %{featurever} Runtime Environment %{debug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_headless_rpo -- %{debug_suffix_unquoted}}
-
-%description headless-slowdebug
-The %{origin_nice} %{featurever} runtime environment without audio and video support.
-%{debug_warning}
-%endif
-
-%if %{include_fastdebug_build}
-%package headless-fastdebug
-Summary: %{origin_nice} %{featurever} Runtime Environment %{fastdebug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_headless_rpo -- %{fastdebug_suffix_unquoted}}
-
-%description headless-fastdebug
-The %{origin_nice} %{featurever} runtime environment without audio and video support.
+The %{origin_nice} %{featurever} runtime environment - portable edition.
 %{fastdebug_warning}
 %endif
 
 %if %{include_normal_build}
 %package devel
-Summary: %{origin_nice} %{featurever} Development Environment
+Summary: %{origin_nice} %{featurever} Development Environment portable edition.
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
@@ -1573,12 +766,12 @@ Group:   Development/Languages
 %{java_devel_rpo %{nil}}
 
 %description devel
-The %{origin_nice} %{featurever} development tools.
+The %{origin_nice} %{featurever} development tools - portable edition.
 %endif
 
 %if %{include_debug_build}
 %package devel-slowdebug
-Summary: %{origin_nice} %{featurever} Development Environment %{debug_on}
+Summary: %{origin_nice} %{featurever} Runtime and Development Environment portable edition %{debug_on}
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Languages
 %endif
@@ -1586,13 +779,13 @@ Group:   Development/Languages
 %{java_devel_rpo -- %{debug_suffix_unquoted}}
 
 %description devel-slowdebug
-The %{origin_nice} %{featurever} development tools.
+The %{origin_nice} %{featurever} development tools - portable edition.
 %{debug_warning}
 %endif
 
 %if %{include_fastdebug_build}
 %package devel-fastdebug
-Summary: %{origin_nice} %{featurever} Development Environment %{fastdebug_on}
+Summary: %{origin_nice} %{featurever} Runtime and Development Environment portable edition %{fastdebug_on}
 %if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
 Group:   Development/Tools
 %endif
@@ -1600,7 +793,7 @@ Group:   Development/Tools
 %{java_devel_rpo -- %{fastdebug_suffix_unquoted}}
 
 %description devel-fastdebug
-The %{origin_nice} %{featurever} development tools              .
+The %{origin_nice} %{featurever} development tools - portable edition.
 %{fastdebug_warning}
 %endif
 
@@ -1608,192 +801,37 @@ The %{origin_nice} %{featurever} development tools              .
 
 %if %{include_normal_build}
 %package static-libs
-Summary: %{origin_nice} %{featurever} libraries for static linking
+Summary: %{origin_nice} %{featurever} libraries for static linking - portable edition.
 
 %{java_static_libs_rpo %{nil}}
 
 %description static-libs
-The %{origin_nice} %{featurever} libraries for static linking.
+The %{origin_nice} %{featurever} libraries for static linking - portable edition.
 %endif
 
 %if %{include_debug_build}
 %package static-libs-slowdebug
-Summary: %{origin_nice} %{featurever} libraries for static linking %{debug_on}
+Summary: %{origin_nice} %{featurever} libraries for static linking - portable edition %{debug_on}
 
 %{java_static_libs_rpo -- %{debug_suffix_unquoted}}
 
 %description static-libs-slowdebug
-The %{origin_nice} %{featurever} libraries for static linking.
+The %{origin_nice} %{featurever} libraries for static linking - portable edition.
 %{debug_warning}
 %endif
 
 %if %{include_fastdebug_build}
 %package static-libs-fastdebug
-Summary: %{origin_nice} %{featurever} libraries for static linking %{fastdebug_on}
+Summary: %{origin_nice} %{featurever} libraries for static linking - portable edition %{fastdebug_on}
 
 %{java_static_libs_rpo -- %{fastdebug_suffix_unquoted}}
 
 %description static-libs-fastdebug
-The %{origin_nice} %{featurever} libraries for static linking.
+The %{origin_nice} %{featurever} libraries for static linking - portable edition.
 %{fastdebug_warning}
 %endif
 
 # staticlibs
-%endif
-
-%if %{include_normal_build}
-%package jmods
-Summary: JMods for %{origin_nice} %{featurever}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_jmods_rpo %{nil}}
-
-%description jmods
-The JMods for %{origin_nice} %{featurever}.
-%endif
-
-%if %{include_debug_build}
-%package jmods-slowdebug
-Summary: JMods for %{origin_nice} %{featurever} %{debug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_jmods_rpo -- %{debug_suffix_unquoted}}
-
-%description jmods-slowdebug
-The JMods for %{origin_nice} %{featurever}.
-%{debug_warning}
-%endif
-
-%if %{include_fastdebug_build}
-%package jmods-fastdebug
-Summary: JMods for %{origin_nice} %{featurever} %{fastdebug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Tools
-%endif
-
-%{java_jmods_rpo -- %{fastdebug_suffix_unquoted}}
-
-%description jmods-fastdebug
-The JMods for %{origin_nice} %{featurever}.
-%{fastdebug_warning}
-%endif
-
-%if %{include_normal_build}
-%package demo
-Summary: %{origin_nice} %{featurever} Demos
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_demo_rpo %{nil}}
-
-%description demo
-The %{origin_nice} %{featurever} demos.
-%endif
-
-%if %{include_debug_build}
-%package demo-slowdebug
-Summary: %{origin_nice} %{featurever} Demos %{debug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_demo_rpo -- %{debug_suffix_unquoted}}
-
-%description demo-slowdebug
-The %{origin_nice} %{featurever} demos.
-%{debug_warning}
-%endif
-
-%if %{include_fastdebug_build}
-%package demo-fastdebug
-Summary: %{origin_nice} %{featurever} Demos %{fastdebug_on}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_demo_rpo -- %{fastdebug_suffix_unquoted}}
-
-%description demo-fastdebug
-The %{origin_nice} %{featurever} demos.
-%{fastdebug_warning}
-%endif
-
-%if %{include_normal_build}
-%package src
-Summary: %{origin_nice} %{featurever} Source Bundle
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_src_rpo %{nil}}
-
-%description src
-The %{compatiblename}-src sub-package contains the complete %{origin_nice} %{featurever}
-class library source code for use by IDE indexers and debuggers.
-%endif
-
-%if %{include_debug_build}
-%package src-slowdebug
-Summary: %{origin_nice} %{featurever} Source Bundle %{for_debug}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_src_rpo -- %{debug_suffix_unquoted}}
-
-%description src-slowdebug
-The %{compatiblename}-src-slowdebug sub-package contains the complete %{origin_nice} %{featurever}
- class library source code for use by IDE indexers and debuggers, %{for_debug}.
-%endif
-
-%if %{include_fastdebug_build}
-%package src-fastdebug
-Summary: %{origin_nice} %{featurever} Source Bundle %{for_fastdebug}
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Development/Languages
-%endif
-
-%{java_src_rpo -- %{fastdebug_suffix_unquoted}}
-
-%description src-fastdebug
-The %{compatiblename}-src-fastdebug sub-package contains the complete %{origin_nice} %{featurever}
- class library source code for use by IDE indexers and debuggers, %{for_fastdebug}.
-%endif
-
-%if %{include_normal_build}
-%package javadoc
-Summary: %{origin_nice} %{featurever} API documentation
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Documentation
-%endif
-Requires: javapackages-filesystem
-Obsoletes: javadoc-slowdebug < 1:13.0.0.33-1.rolling
-
-%{java_javadoc_rpo -- %{nil} %{nil}}
-
-%description javadoc
-The %{origin_nice} %{featurever} API documentation.
-%endif
-
-%if %{include_normal_build}
-%package javadoc-zip
-Summary: %{origin_nice} %{featurever} API documentation compressed in a single archive
-%if (0%{?rhel} > 0 && 0%{?rhel} <= 8) || (0%{?fedora} >= 0 && 0%{?fedora} < 30)
-Group:   Documentation
-%endif
-Requires: javapackages-filesystem
-Obsoletes: javadoc-zip-slowdebug < 1:13.0.0.33-1.rolling
-
-%{java_javadoc_rpo -- %{nil} -zip}
-%{java_javadoc_rpo -- %{nil} %{nil}}
-
-%description javadoc-zip
-The %{origin_nice} %{featurever} API documentation compressed in a single archive.
 %endif
 
 %prep
@@ -1910,21 +948,7 @@ done
 %endif
 
 # Prepare desktop files
-# The _X_ syntax indicates variables that are replaced by make upstream
-# The @X@ syntax indicates variables that are replaced by configure upstream
-for suffix in %{build_loop} ; do
-for file in %{SOURCE9}; do
-    FILE=`basename $file | sed -e s:\.in$::g`
-    EXT="${FILE##*.}"
-    NAME="${FILE%.*}"
-    OUTPUT_FILE=$NAME$suffix.$EXT
-    sed    -e  "s:_SDKBINDIR_:%{sdkbindir -- $suffix}:g" $file > $OUTPUT_FILE
-    sed -i -e  "s:@target_cpu@:%{_arch}:g" $OUTPUT_FILE
-    sed -i -e  "s:@OPENJDK_VER@:%{version}-%{release}.%{_arch}$suffix:g" $OUTPUT_FILE
-    sed -i -e  "s:@JAVA_VER@:%{javaver}:g" $OUTPUT_FILE
-    sed -i -e  "s:@JAVA_VENDOR@:%{origin}:g" $OUTPUT_FILE
-done
-done
+# Portables do not have desktop integration
 
 # Setup nss.cfg
 sed -e "s:@NSS_LIBDIR@:%{NSS_LIBDIR}:g" %{SOURCE11} > nss.cfg
@@ -2006,6 +1030,7 @@ function buildjdk() {
 %ifarch %{ppc64le}
     --with-jobs=1 \
 %endif
+    --with-cacerts-file=`readlink -f %{_sysconfdir}/pki/java/cacerts`  \
     --with-version-build=%{buildver} \
     --with-version-pre="%{ea_designator}" \
     --with-version-opt=%{lts_designator} \
@@ -2073,9 +1098,6 @@ function installjdk() {
         sed -i -e "s:^security.useSystemPropertiesFile=.*:security.useSystemPropertiesFile=true:" \
             ${imagepath}/conf/security/java.security
 
-        # Use system-wide tzdata
-        mv ${imagepath}/lib/tzdb.dat{,.upstream}
-        ln -sv %{_datadir}/javazi-1.8/tzdb.dat ${imagepath}/lib/tzdb.dat
 
         # Rename OpenJDK cacerts database
         mv ${imagepath}/lib/security/cacerts{,.upstream}
