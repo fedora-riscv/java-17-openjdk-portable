@@ -1,3 +1,14 @@
+#FOR TESTING ONLY! REMOVE!
+%define rhel %{nil}
+
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+# portable jdk 17 specific bug, _jvmdir being missing
+%define _jvmdir /usr/lib/jvm
+%endif
+
+# debug_package %%{nil} is portable-jdks specific
+%define  debug_package %{nil}
+
 # RPM conditionals so as to be able to dynamically produce
 # slowdebug/release builds. See:
 # http://rpm.org/user_doc/conditional_builds.html
@@ -25,6 +36,15 @@
 %bcond_without fresh_libjvm
 # Build with system libraries
 %bcond_with system_libs
+
+
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+# This is RHEL 7 specific as it doesn't seem to have the
+# __brp_strip_static_archive macro.
+%define __os_install_post %{nil}
+%endif
+
+%global unpacked_lilcenses %{_datarootdir}/licenses
 
 # Workaround for stripping of debug symbols from static libraries
 %if %{with staticlibs}
@@ -149,7 +169,12 @@
 # Set of architectures for which java has short vector math library (libsvml.so)
 %global svml_arches x86_64
 # Set of architectures where we verify backtraces with gdb
+# s390x fails on RHEL 7 so we exclude it there
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%global gdb_arches %{arm} %{aarch64} %{ix86} %{power64} sparcv9 sparc64 x86_64 %{zero_arches}
+%else
 %global gdb_arches %{jit_arches} %{zero_arches}
+%endif
 
 # By default, we build a debug build during main build on JIT architectures
 %if %{with slowdebug}
@@ -423,10 +448,30 @@
 %global static_libs_install_dir %{static_libs_arch_dir}/glibc
 # output dir stub
 %define buildoutputdir() %{expand:build/jdk%{featurever}.build%{?1}}
+%define installoutputdir() %{expand:install/jdk%{featurever}.install%{?1}}
 # we can copy the javadoc to not arched dir, or make it not noarch
 %define uniquejavadocdir()    %{expand:%{fullversion}.%{_arch}%{?1}}
 # main id and dir of this jdk
 %define uniquesuffix()        %{expand:%{fullversion}.%{_arch}%{?1}}
+# portable only declarations
+%global jreimage                jre
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+%define jreportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;el7\\(_[0-9]\\)*;portable%{1}.jre.;g" | sed "s;openjdkportable;el;g")
+%define jdkportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;el7\\(_[0-9]\\)*;portable%{1}.jdk.;g" | sed "s;openjdkportable;el;g")
+%define staticlibsportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;el7\\(_[0-9]\\)*;portable%{1}.static-libs.;g" | sed "s;openjdkportable;el;g")
+%else
+%define jreportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;fc\\([0-9]\\)*;\\0.portable%{1}.jre;g" | sed "s;openjdkportable;el;g")
+%define jdkportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;fc\\([0-9]\\)*;\\0.portable%{1}.jdk;g" | sed "s;openjdkportable;el;g")
+%define staticlibsportablenameimpl() %(echo %{uniquesuffix ""} | sed "s;fc\\([0-9]\\)*;\\0.portable%{1}.static-libs;g" | sed "s;openjdkportable;el;g")
+%endif
+%define jreportablearchive()  %{expand:%{jreportablenameimpl -- %%{1}}.tar.xz}
+%define jdkportablearchive()  %{expand:%{jdkportablenameimpl -- %%{1}}.tar.xz}
+%define staticlibsportablearchive()  %{expand:%{staticlibsportablenameimpl -- %%{1}}.tar.xz}
+%define jreportablename()     %{expand:%{jreportablenameimpl -- %%{1}}}
+%define jdkportablename()     %{expand:%{jdkportablenameimpl -- %%{1}}}
+# Intentionally use jdkportablenameimpl here since we want to have static-libs files overlayed on
+# top of the JDK archive
+%define staticlibsportablename()     %{expand:%{jdkportablenameimpl -- %%{1}}}
 
 #################################################################
 # fix for https://bugzilla.redhat.com/show_bug.cgi?id=1111349
@@ -469,9 +514,6 @@
 %else
 %global alternatives_requires %{_sbindir}/alternatives
 %endif
-
-%global family %{name}.%{_arch}
-%global family_noarch  %{name}
 
 %if %{with_systemtap}
 # Where to install systemtap tapset (links)
@@ -593,6 +635,14 @@ Source17: nss.fips.cfg.in
 # Ensure translations are available for new timezones
 Source18: TestTranslations.java
 
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+# boot jdk for portable build root on
+Source1001: ojdk17-aarch64-17.35.tar.gz
+Source1002: ojdk17-ppc64le-17.35.tar.gz
+Source1003: ojdk17-x86_64-17.35.tar.gz
+Source1004: ojdk17-s390x-17.35.tar.gz
+%endif
+
 ############################################
 #
 # RPM/distribution specific patches
@@ -666,8 +716,21 @@ BuildRequires: desktop-file-utils
 # elfutils only are OK for build without AOT
 BuildRequires: elfutils-devel
 BuildRequires: fontconfig-devel
+BuildRequires: freetype-devel
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+BuildRequires: devtoolset-8-gcc
+BuildRequires: devtoolset-8-gcc-c++
+%else
+BuildRequires: gcc
+# gcc-c++ is already needed
+BuildRequires: java-%{buildjdkver}-openjdk-devel
+%endif
 BuildRequires: gcc-c++
 BuildRequires: gdb
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+# rhel7 only, portables only. Rhel8 have gtk3, rpms have runtime recommends of gtk
+BuildRequires: gtk2-devel
+%endif
 BuildRequires: libxslt
 BuildRequires: libX11-devel
 BuildRequires: libXi-devel
@@ -679,18 +742,31 @@ BuildRequires: libXtst-devel
 # Requirement for setting up nss.cfg and nss.fips.cfg
 BuildRequires: nss-devel
 # Requirement for system security property test
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
 BuildRequires: crypto-policies
+%endif
 BuildRequires: pkgconfig
 BuildRequires: xorg-x11-proto-devel
 BuildRequires: zip
+# to pack portable tarballs
+BuildRequires: tar
+BuildRequires: unzip
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+# No javapackages-filesystem on el7,nor is needed for portables
+%else
 BuildRequires: javapackages-filesystem
 BuildRequires: java-%{buildjdkver}-openjdk-devel
+%endif
+
 # Zero-assembler build requirement
 %ifarch %{zero_arches}
 BuildRequires: libffi-devel
 %endif
 # 2022e required as of JDK-8295173
 BuildRequires: tzdata-java >= 2022e
+
+# cacerts build requirement in portable mode
+BuildRequires: ca-certificates
 # Earlier versions have a bug in tree vectorization on PPC
 BuildRequires: gcc >= 4.8.3-8
 
@@ -957,6 +1033,26 @@ sed -e "s:@NSS_LIBDIR@:%{NSS_LIBDIR}:g" %{SOURCE11} > nss.cfg
 sed -e "s:@NSS_LIBDIR@:%{NSS_LIBDIR}:g" %{SOURCE17} > nss.fips.cfg
 
 %build
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+mkdir bootjdk
+pushd bootjdk
+%ifarch %{aarch64}
+tar --strip-components=1 -xf %{SOURCE1001} 
+%endif
+%ifarch %{ppc64le}
+tar --strip-components=1 -xf %{SOURCE1002} 
+%endif
+%ifarch x86_64
+tar --strip-components=1 -xf %{SOURCE1003} 
+%endif
+%ifarch s390x
+tar --strip-components=1 -xf %{SOURCE1004}
+%endif
+BOOT_JDK=$PWD
+popd
+%else
+BOOT_JDK=%{bootjdk}
+%endif
 
 # How many CPU's do we have?
 export NUM_PROC=%(/usr/bin/getconf _NPROCESSORS_ONLN 2> /dev/null || :)
@@ -1023,7 +1119,11 @@ function buildjdk() {
     # rather than ${link_opt} as the system versions
     # are always used in a system_libs build, even
     # for the static library build
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+    scl enable devtoolset-8 -- bash ${top_dir_abs_src_path}/configure \
+%else
     bash ${top_dir_abs_src_path}/configure \
+%endif
 %ifarch %{zero_arches}
     --with-jvm-variants=zero \
 %endif
@@ -1064,8 +1164,11 @@ function buildjdk() {
     --disable-warnings-as-errors
 
     cat spec.gmk
-
+%if (0%{?rhel} > 0 && 0%{?rhel} < 8)
+    scl enable devtoolset-8  -- make \
+%else
     make \
+%endif
       LOG=trace \
       WARNINGS_ARE_ERRORS="-Wno-error" \
       CFLAGS_WARNINGS_ARE_ERRORS="-Wno-error" \
@@ -1457,493 +1560,69 @@ $JAVA_HOME/bin/javap -l java.nio.ByteBuffer | grep LocalVariableTable
 done
 
 %if %{include_normal_build}
-# intentionally only for non-debug
-%pretrans headless -p <lua>
--- see https://bugzilla.redhat.com/show_bug.cgi?id=1038092 for whole issue
--- see https://bugzilla.redhat.com/show_bug.cgi?id=1290388 for pretrans over pre
--- if copy-jdk-configs is in transaction, it installs in pretrans to temp
--- if copy_jdk_configs is in temp, then it means that copy-jdk-configs is in transaction  and so is
--- preferred over one in %%{_libexecdir}. If it is not in transaction, then depends
--- whether copy-jdk-configs is installed or not. If so, then configs are copied
--- (copy_jdk_configs from %%{_libexecdir} used) or not copied at all
-local posix = require "posix"
-
-if (os.getenv("debug") == "true") then
-  debug = true;
-  print("cjc: in spec debug is on")
-else
-  debug = false;
-end
-
-SOURCE1 = "%{rpm_state_dir}/copy_jdk_configs.lua"
-SOURCE2 = "%{_libexecdir}/copy_jdk_configs.lua"
-
-local stat1 = posix.stat(SOURCE1, "type");
-local stat2 = posix.stat(SOURCE2, "type");
-
-  if (stat1 ~= nil) then
-  if (debug) then
-    print(SOURCE1 .." exists - copy-jdk-configs in transaction, using this one.")
-  end;
-  package.path = package.path .. ";" .. SOURCE1
-else
-  if (stat2 ~= nil) then
-  if (debug) then
-    print(SOURCE2 .." exists - copy-jdk-configs already installed and NOT in transaction. Using.")
-  end;
-  package.path = package.path .. ";" .. SOURCE2
-  else
-    if (debug) then
-      print(SOURCE1 .." does NOT exists")
-      print(SOURCE2 .." does NOT exists")
-      print("No config files will be copied")
-    end
-  return
-  end
-end
-arg = nil ;  -- it is better to null the arg up, no meter if they exists or not, and use cjc as module in unified way, instead of relaying on "main" method during require "copy_jdk_configs.lua"
-cjc = require "copy_jdk_configs.lua"
-args = {"--currentjvm", "%{uniquesuffix %{nil}}", "--jvmdir", "%{_jvmdir %{nil}}", "--origname", "%{name}", "--origjavaver", "%{javaver}", "--arch", "%{_arch}", "--temp", "%{rpm_state_dir}/%{name}.%{_arch}"}
-cjc.mainProgram(args)
-
-%post
-%{post_script %{nil}}
-
-%post headless
-%{post_headless %{nil}}
-
-%postun
-%{postun_script %{nil}}
-
-%postun headless
-%{postun_headless %{nil}}
-
-%posttrans
-%{posttrans_script %{nil}}
-
-%posttrans headless
-%{alternatives_java_install %{nil}}
-
-%post devel
-%{post_devel %{nil}}
-
-%postun devel
-%{postun_devel %{nil}}
-
-%posttrans  devel
-%{posttrans_devel %{nil}}
-
-%posttrans javadoc
-%{alternatives_javadoc_install %{nil}}
-
-%postun javadoc
-%{postun_javadoc %{nil}}
-
-%posttrans javadoc-zip
-%{alternatives_javadoczip_install %{nil}}
-
-%postun javadoc-zip
-%{postun_javadoc_zip %{nil}}
-%endif
-
-%if %{include_debug_build}
-%post slowdebug
-%{post_script -- %{debug_suffix_unquoted}}
-
-%post headless-slowdebug
-%{post_headless -- %{debug_suffix_unquoted}}
-
-%posttrans headless-slowdebug
-%{alternatives_java_install -- %{debug_suffix_unquoted}}
-
-%postun slowdebug
-%{postun_script -- %{debug_suffix_unquoted}}
-
-%postun headless-slowdebug
-%{postun_headless -- %{debug_suffix_unquoted}}
-
-%posttrans slowdebug
-%{posttrans_script -- %{debug_suffix_unquoted}}
-
-%post devel-slowdebug
-%{post_devel -- %{debug_suffix_unquoted}}
-
-%postun devel-slowdebug
-%{postun_devel -- %{debug_suffix_unquoted}}
-
-%posttrans  devel-slowdebug
-%{posttrans_devel -- %{debug_suffix_unquoted}}
-%endif
-
-%if %{include_fastdebug_build}
-%post fastdebug
-%{post_script -- %{fastdebug_suffix_unquoted}}
-
-%post headless-fastdebug
-%{post_headless -- %{fastdebug_suffix_unquoted}}
-
-%postun fastdebug
-%{postun_script -- %{fastdebug_suffix_unquoted}}
-
-%postun headless-fastdebug
-%{postun_headless -- %{fastdebug_suffix_unquoted}}
-
-%posttrans fastdebug
-%{posttrans_script -- %{fastdebug_suffix_unquoted}}
-
-%posttrans headless-fastdebug
-%{alternatives_java_install -- %{fastdebug_suffix_unquoted}}
-
-%post devel-fastdebug
-%{post_devel -- %{fastdebug_suffix_unquoted}}
-
-%postun devel-fastdebug
-%{postun_devel -- %{fastdebug_suffix_unquoted}}
-
-%posttrans  devel-fastdebug
-%{posttrans_devel -- %{fastdebug_suffix_unquoted}}
-
-%endif
-
-%if %{include_normal_build}
 %files
 # main package builds always
-%{files_jre %{nil}}
+%{_jvmdir}/%{jreportablearchive -- %%{nil}}
+%{_jvmdir}/%{jreportablearchive -- %%{nil}}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
 %else
 %files
 # placeholder
 %endif
 
-
-%if %{include_normal_build}
-%files headless
-# important note, see https://bugzilla.redhat.com/show_bug.cgi?id=1038092 for whole issue
-# all config/noreplace files (and more) have to be declared in pretrans. See pretrans
-%{files_jre_headless %{nil}}
-
 %files devel
-%{files_devel %{nil}}
+%{_jvmdir}/%{jdkportablearchive -- %%{nil}}
+%{_jvmdir}/%{jdkportablearchive -- .debuginfo}
+%{_jvmdir}/%{jdkportablearchive -- %%{nil}}.sha256sum
+%{_jvmdir}/%{jdkportablearchive -- .debuginfo}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
 
 %if %{include_staticlibs}
 %files static-libs
-%{files_static_libs %{nil}}
-%endif
-
-%files jmods
-%{files_jmods %{nil}}
-
-%files demo
-%{files_demo %{nil}}
-
-%files src
-%{files_src %{nil}}
-
-%files javadoc
-%{files_javadoc %{nil}}
-
-# This puts a huge documentation file in /usr/share
-# It is now architecture-dependent, as eg. AOT and Graal are now x86_64 only
-# same for debug variant
-%files javadoc-zip
-%{files_javadoc_zip %{nil}}
+%{_jvmdir}/%{staticlibsportablearchive -- %%{nil}}
+%{_jvmdir}/%{staticlibsportablearchive -- %%{nil}}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
 %endif
 
 %if %{include_debug_build}
 %files slowdebug
-%{files_jre -- %{debug_suffix_unquoted}}
-
-%files headless-slowdebug
-%{files_jre_headless -- %{debug_suffix_unquoted}}
+%{_jvmdir}/%{jreportablearchive -- .slowdebug}
+%{_jvmdir}/%{jreportablearchive -- .slowdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
 
 %files devel-slowdebug
-%{files_devel -- %{debug_suffix_unquoted}}
+%{_jvmdir}/%{jdkportablearchive -- .slowdebug}
+%{_jvmdir}/%{jdkportablearchive -- .slowdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
 
 %if %{include_staticlibs}
 %files static-libs-slowdebug
-%{files_static_libs -- %{debug_suffix_unquoted}}
+%{_jvmdir}/%{staticlibsportablearchive -- .slowdebug}
+%{_jvmdir}/%{staticlibsportablearchive -- .slowdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
 %endif
-
-%files jmods-slowdebug
-%{files_jmods -- %{debug_suffix_unquoted}}
-
-%files demo-slowdebug
-%{files_demo -- %{debug_suffix_unquoted}}
-
-%files src-slowdebug
-%{files_src -- %{debug_suffix_unquoted}}
 %endif
 
 %if %{include_fastdebug_build}
 %files fastdebug
-%{files_jre -- %{fastdebug_suffix_unquoted}}
-
-%files headless-fastdebug
-%{files_jre_headless -- %{fastdebug_suffix_unquoted}}
+%{_jvmdir}/%{jreportablearchive -- .fastdebug}
+%{_jvmdir}/%{jreportablearchive -- .fastdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
 
 %files devel-fastdebug
-%{files_devel -- %{fastdebug_suffix_unquoted}}
+%{_jvmdir}/%{jdkportablearchive -- .fastdebug}
+%{_jvmdir}/%{jdkportablearchive -- .fastdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
 
 %if %{include_staticlibs}
 %files static-libs-fastdebug
-%{files_static_libs -- %{fastdebug_suffix_unquoted}}
+%{_jvmdir}/%{staticlibsportablearchive -- .fastdebug}
+%{_jvmdir}/%{staticlibsportablearchive -- .fastdebug}.sha256sum
+%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
 %endif
-
-%files jmods-fastdebug
-%{files_jmods -- %{fastdebug_suffix_unquoted}}
-
-%files demo-fastdebug
-%{files_demo -- %{fastdebug_suffix_unquoted}}
-
-%files src-fastdebug
-%{files_src -- %{fastdebug_suffix_unquoted}}
-
 %endif
 
 %changelog
-* Wed Nov 09 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.1-0.1.ea
-- Update to jdk-17.0.6+1
-- Update release notes to 17.0.6+1
-- Switch to EA mode for 17.0.6 pre-release builds.
-- Re-enable EA upstream status check now it is being actively maintained.
-- Drop JDK-8294357 (tzdata2022d) & JDK-8295173 (tzdata2022e) local patches which are now upstream
-- Bump tzdata requirement to 2022e now the package is available in Fedora
+* Mon Oct 31 2022 Jiri Vanek <jvanek@redhat.com> - 1:17.0.5.0.8-2
+- initial import
 
-* Wed Oct 19 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.5.0.8-1
-- Update to jdk-17.0.5+8 (GA)
-- Update release notes to 17.0.5+8 (GA)
-- Switch to GA mode for final release.
-- The stdc++lib, zlib & freetype options should always be set from the global, so they are not altered for staticlibs builds
-- Remove freetype sources along with zlib sources
-
-* Fri Oct 14 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.5.0.7-0.2.ea
-- Update in-tree tzdata to 2022e with JDK-8294357 & JDK-8295173
-- Update CLDR data with Europe/Kyiv (JDK-8293834)
-- Drop JDK-8292223 patch which we found to be unnecessary
-- Update TestTranslations.java to use public API based on TimeZoneNamesTest upstream
-
-* Tue Oct 04 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.5.0.7-0.1.ea
-- Update to jdk-17.0.5+7
-- Update release notes to 17.0.5+7
-
-* Mon Oct 03 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.5.0.1-0.1.ea
-- Update to jdk-17.0.5+1
-- Update release notes to 17.0.5+1
-- Switch to EA mode for 17.0.5 pre-release builds.
-- Bump HarfBuzz bundled version to 4.4.1 following JDK-8289853
-- Bump FreeType bundled version to 2.12.1 following JDK-8290334
-
-* Tue Aug 30 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.1.1-3
-- Switch to static builds, reducing system dependencies and making build more portable
-
-* Mon Aug 29 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.1.1-2
-- Update FIPS support to bring in latest changes
-- * RH2048582: Support PKCS#12 keystores
-- * RH2020290: Support TLS 1.3 in FIPS mode
-
-* Sun Aug 21 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.1.1-1
-- Update to jdk-17.0.4.1+1
-- Update release notes to 17.0.4.1+1
-- Add patch to provide translations for Europe/Kyiv added in tzdata2022b
-- Add test to ensure timezones can be translated
-
-* Mon Aug 15 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.8-2
-- Update FIPS support to bring in latest changes
-- * RH2104724: Avoid import/export of DH private keys
-- * RH2092507: P11Key.getEncoded does not work for DH keys in FIPS mode
-- * Build the systemconf library on all platforms
-
-* Fri Jul 22 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.8-1
-- Update to jdk-17.0.4.0+8
-- Update release notes to 17.0.4.0+8
-- Switch to GA mode for release
-- Exclude x86 where java_arches is undefined, in order to unbreak build
-
-* Fri Jul 22 2022 Jiri Vanek <gnu.andrew@redhat.com> - 1:17.0.4.0.7-0.3.ea
-- moved to build only on %%{java_arches}
--- https://fedoraproject.org/wiki/Changes/Drop_i686_JDKs
-- reverted :
--- Rebuilt for https://fedoraproject.org/wiki/Fedora_37_Mass_Rebuild (always mess up release)
--- Try to build on x86 again by creating a husk of a JDK which does not depend on itself
--- Exclude x86 from builds as the bootstrap JDK is now completely broken and unusable
--- Replaced binaries and .so files with bash-stubs on i686
-- added ExclusiveArch:  %%{java_arches}
--- this now excludes i686
--- this is safely backport-able to older fedoras, as the macro was  backported proeprly (with i686 included)
-- https://bugzilla.redhat.com/show_bug.cgi?id=2104128
-
-* Thu Jul 21 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1:17.0.4.0.7-0.2.ea.1
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_37_Mass_Rebuild
-
-* Tue Jul 19 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.7-0.2.ea
-- Try to build on x86 again by creating a husk of a JDK which does not depend on itself
-
-* Sat Jul 16 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.7-0.1.ea
-- Update to jdk-17.0.3.0+7
-- Update release notes to 17.0.3.0+7
-- Exclude x86 from builds as the bootstrap JDK is now completely broken and unusable
-- Need to include the '.S' suffix in debuginfo checks after JDK-8284661
-
-* Thu Jul 14 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.5.ea
-- Explicitly require crypto-policies during build and runtime for system security properties
-
-* Thu Jul 14 2022 Jiri Vanek <jvanek@redhat.com> - 1:17.0.4.0.1-0.4.ea
-- Replaced binaries and .so files with bash-stubs on i686 in preparation of the removal on that architecture:
-- https://fedoraproject.org/wiki/Changes/Drop_i686_JDKs
-
-* Thu Jul 14 2022 FeRD (Frank Dana) <ferdnyc@gmail.com> - 1:17.0.4.0.1-0.3.ea
-- Add javaver- and origin-specific javadoc and javadoczip alternatives.
-
-* Thu Jul 14 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.2.ea
-- Make use of the vendor version string to store our version & release rather than an upstream release date
-- Include a test in the RPM to check the build has the correct vendor information.
-
-* Thu Jul 14 2022 Jayashree Huttanagoudar <jhuttana@redhat.com> - 1:17.0.4.0.1-0.2.ea
-- Fix issue where CheckVendor.java test erroneously passes when it should fail.
-- Add proper quoting so '&' is not treated as a special character by the shell.
-
-* Mon Jul 11 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.4.0.1-0.1.ea
-- Update to jdk-17.0.4.0+1
-- Update release notes to 17.0.4.0+1
-- Switch to EA mode for 17.0.4 pre-release builds.
-- Drop JDK-8282004 patch which is now upstreamed under JDK-8282231
-- Print release file during build, which should now include a correct SOURCE value from .src-rev
-- Update tarball script with IcedTea GitHub URL and .src-rev generation
-- Include script to generate bug list for release notes
-- Update tzdata requirement to 2022a to match JDK-8283350
-- Move EA designator check to prep so failures can be caught earlier
-- Make EA designator check non-fatal while upstream is not maintaining it
-
-* Thu Jul 07 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-7
-- Fix whitespace in spec file
-
-* Thu Jul 07 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-7
-- Sequence spec file sections as they are run by rpmbuild (build, install then test)
-
-* Tue Jul 05 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-7
-- Turn on system security properties as part of the build's install section
-- Move cacerts replacement to install section and retain original of this and tzdb.dat
-- Run tests on the installed image, rather than the build image
-- Introduce variables to refer to the static library installation directories
-- Use relative symlinks so they work within the image
-- Run debug symbols check during build stage, before the install strips them
-
-* Fri Jul 01 2022 Stephan Bergmann <sbergman@redhat.com> - 1:17.0.3.0.7-6
-- Fix flatpak builds by exempting them from bootstrap
-
-* Thu Jun 30 2022 Francisco Ferrari Bihurriet <fferrari@redhat.com> - 1:17.0.3.0.7-5
-- RH2007331: SecretKey generate/import operations don't add the CKA_SIGN attribute in FIPS mode
-
-* Mon Jun 27 2022 Stephan Bergmann <sbergman@redhat.com> - 1:17.0.3.0.7-4
-- Fix flatpak builds (catering for their uncompressed manual pages)
-
-* Wed Jun 22 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-3
-- Update FIPS support to bring in latest changes
-- * RH2036462: sun.security.pkcs11.wrapper.PKCS11.getInstance breakage
-- * RH2090378: Revert to disabling system security properties and FIPS mode support together
-- Rebase RH1648249 nss.cfg patch so it applies after the FIPS patch
-- Enable system security properties in the RPM (now disabled by default in the FIPS repo)
-- Improve security properties test to check both enabled and disabled behaviour
-- Run security properties test with property debugging on
-
-* Sun Jun 12 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-2
-- Rebase FIPS patches from fips-17u branch and simplify by using a single patch from that repository
-- Rebase RH1648249 nss.cfg patch so it applies after the FIPS patch
-- RH2023467: Enable FIPS keys export
-- RH2094027: SunEC runtime permission for FIPS
-
-* Sun Apr 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.7-1
-- April 2022 security update to jdk 17.0.3+7
-- Update release notes to 17.0.3.0+7
-- Update README.md and generate_source_tarball.sh to match CentOS
-- Switch to GA mode for release
-- JDK-8283911 patch no longer needed now we're GA...
-
-* Wed Apr 13 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.5-0.1.ea
-- Update to jdk-17.0.3.0+5
-- Update release notes to 17.0.3.0+5
-
-* Fri Apr 08 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.3.0.1-0.1.ea
-- Update to jdk-17.0.3.0+1
-- Update release notes to 17.0.3.0+1
-- Switch to EA mode for 17.0.3 pre-release builds.
-- Add JDK-8283911 to fix bad DEFAULT_PROMOTED_VERSION_PRE value
-
-* Wed Apr 06 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-9
-- Enable AlgorithmParameters and AlgorithmParameterGenerator services in FIPS mode
-
-* Wed Mar 30 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
-- java-17-openjdk should depend on itself to build, not java-latest-openjdk which is now OpenJDK 18
-
-* Wed Feb 23 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-8
-- Detect NSS at runtime for FIPS detection
-- Turn off build-time NSS linking and go back to an explicit Requires on NSS
-
-* Tue Feb 08 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-7
-- Reinstate JIT builds on x86_32.
-- Add JDK-8282004 to fix missing CALL effects on x86_32.
-
-* Mon Feb 07 2022 Severin Gehwolf <sgehwolf@redhat.com> - 1:17.0.2.0.8-6
-- Re-enable gdb backtrace check.
-
-* Mon Feb 07 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-5
-- Introduce stapinstall variable to set SystemTap arch directory correctly (e.g. arm64 on aarch64)
-- Need to support noarch for creating source RPMs for non-scratch builds.
-
-* Fri Feb 04 2022 Jiri Vanek <jvanek@redhat.com> - 1:17.0.2.0.8-4
-- moved to become system jdk
-
-* Fri Feb 04 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-2
-- Temporarily move x86 to use Zero in order to get a working build
-- Replace -mstackrealign with -mincoming-stack-boundary=2 -mpreferred-stack-boundary=4 on x86_32 for stack alignment
-- Support a HotSpot-only build so a freshly built libjvm.so can then be used in the bootstrap JDK.
-- Explicitly list JIT architectures rather than relying on those with slowdebug builds
-- Disable the serviceability agent on Zero architectures even when the architecture itself is supported
-
-* Mon Jan 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.2.0.8-1.rolling
-- January 2022 security update to jdk 17.0.2+8
-- Extend LTS check to exclude EPEL.
-- Rename libsvml.so to libjsvml.so following JDK-8276025
-- Remove JDK-8276572 patch which is now upstream.
-- Rebase RH1995150 & RH1996182 patches following JDK-8275863 addition to module-info.java
-
-* Mon Jan 24 2022 Severin Gehwolf <sgehwolf@redhat.com> - 1:17.0.2.0.8-1.rolling
-- Set LTS designator.
-
-* Mon Jan 24 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-16.rolling
-- Separate crypto policy initialisation from FIPS initialisation, now they are no longer interdependent
-
-* Thu Jan 20 2022 Fedora Release Engineering <releng@fedoraproject.org> - 1:17.0.1.0.12-15.rolling.1
-- Rebuilt for https://fedoraproject.org/wiki/Fedora_36_Mass_Rebuild
-
-* Tue Jan 18 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-15.rolling
-- Sync gdb test with java-1.8.0-openjdk and improve architecture restrictions.
-- Disable on x86, x86_64, ppc64le & s390x while these are broken in rawhide.
-
-* Thu Jan 13 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-14.rolling
-- Fix FIPS issues in native code and with initialisation of java.security.Security
-
-* Thu Dec 09 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.1.0.12-13.rolling
-- Storing and restoring alterntives during update manually
-- Fixing Bug 2001567 - update of JDK/JRE is removing its manually selected alterantives and select (as auto) system JDK/JRE
--- The move of alternatives creation to posttrans to fix:
--- Bug 1200302 - dnf reinstall breaks alternatives
--- Had caused the alternatives to be removed, and then created again,
--- instead of being added, and then removing the old, and thus persisting
--- the selection in family
--- Thus this fix, is storing the family of manually selected master, and if
--- stored, then it is restoring the family of the master
-
-* Thu Dec 09 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.1.0.12-12.rolling
-- Family extracted to globals
-
-* Thu Dec 09 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.1.0.12-11.rolling
-- javadoc-zip got its own provides next to plain javadoc ones
-
-* Thu Dec 09 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.1.0.12-10.rolling
-- replaced tabs by sets of spaces to make rpmlint happy
-
-* Mon Nov 29 2021 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.1.0.12-9.rolling
-- Handle Fedora in distro conditionals that currently only pertain to RHEL.
-
-* Thu Nov 18 2021 Jiri Vanek <jvanek@redhat.com> - 1:17.0.0.0.35-8
--- inital import
