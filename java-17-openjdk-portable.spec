@@ -44,7 +44,7 @@
 %define __os_install_post %{nil}
 %endif
 
-%global unpacked_lilcenses %{_datarootdir}/licenses
+%global unpacked_licenses %{_datarootdir}/licenses
 
 # Workaround for stripping of debug symbols from static libraries
 %if %{with staticlibs}
@@ -251,10 +251,10 @@
 %global debug_symbols internal
 
 # unlike portables,the rpms have to use static_libs_target very dynamically
-%global bootstrap_targets images
-%global release_targets images docs-zip
+%global bootstrap_targets images legacy-jre-image
+%global release_targets images docs-zip legacy-jre-image
 # No docs nor bootcycle for debug builds
-%global debug_targets images
+%global debug_targets images legacy-jre-image
 # Target to use to just build HotSpot
 %global hotspot_target hotspot
 
@@ -448,7 +448,6 @@
 %global static_libs_install_dir %{static_libs_arch_dir}/glibc
 # output dir stub
 %define buildoutputdir() %{expand:build/jdk%{featurever}.build%{?1}}
-%define installoutputdir() %{expand:install/jdk%{featurever}.install%{?1}}
 # we can copy the javadoc to not arched dir, or make it not noarch
 %define uniquejavadocdir()    %{expand:%{fullversion}.%{_arch}%{?1}}
 # main id and dir of this jdk
@@ -1367,26 +1366,58 @@ for suffix in %{build_loop} ; do
   # Print release information
   cat ${top_dir_abs_main_build_path}/images/%{jdkimage}/release
 
+################################################################################
+  pushd ${top_dir_abs_main_build_path}/images
+    mv %{jdkimage} %{jdkportablename -- "$nameSuffix"}
+    mv %{jreimage} %{jreportablename -- "$nameSuffix"}
+    tar -cJf ../../../../%{jdkportablearchive -- "$nameSuffix"}  --exclude='**.debuginfo' %{jdkportablename -- "$nameSuffix"}
+    sha256sum ../../../../%{jdkportablearchive -- "$nameSuffix"} > ../../../../%{jdkportablearchive -- "$nameSuffix"}.sha256sum
+    tar -cJf ../../../../%{jreportablearchive -- "$nameSuffix"}  --exclude='**.debuginfo' %{jreportablename -- "$nameSuffix"}
+    sha256sum ../../../../%{jreportablearchive -- "$nameSuffix"} > ../../../../%{jreportablearchive -- "$nameSuffix"}.sha256sum
+    # copy licenses so they are avialable out of tarball
+    cp -r  %{jdkportablename -- "$nameSuffix"}/legal  ../../../../%{jdkportablearchive -- "$nameSuffix"}-legal
+    mv %{jdkportablename -- "$nameSuffix"} %{jdkimage}
+    mv %{jreportablename -- "$nameSuffix"} %{jreimage}
+  popd #images
+%if %{include_staticlibs}
+  top_dir_abs_staticlibs_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{staticlibs_suffix}}
+  pushd ${top_dir_abs_staticlibs_build_path}/images
+    # Static libraries (needed for building graal vm with native image)
+    # Tar as overlay. Transform to the JDK name, since we just want to "add"
+    # static libraries to that folder
+    portableJDKname=%{staticlibsportablename -- "$nameSuffix"}
+    tar -cJf ../../../../%{staticlibsportablearchive -- "$nameSuffix"} --transform "s|^%{static_libs_image}/lib/*|$portableJDKname/lib/static/linux-%{archinstall}/glibc/|" "%{static_libs_image}/lib"
+    sha256sum ../../../../%{staticlibsportablearchive -- "$nameSuffix"} > ../../../../%{staticlibsportablearchive -- "$nameSuffix"}.sha256sum
+  popd #staticlibs-images
+%endif
+################################################################################
+# note, currently no debuginfo, consult portbale spec for external (zipped) debuginof, being tarred alone
+################################################################################
+
 # build cycles
 done # end of release / debug cycle loop
 
 %install
 STRIP_KEEP_SYMTAB=libjvm*
 
+if [ "fixme" == "todo" ] ; then
 for suffix in %{build_loop} ; do
 
+# done in build
 top_dir_abs_main_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{main_suffix}}
 %if %{include_staticlibs}
 top_dir_abs_staticlibs_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{staticlibs_loop}}
 %endif
 jdk_image=${top_dir_abs_main_build_path}/images/%{jdkimage}
 
+# tbd in rpms
 # Install the jdk
 mkdir -p $RPM_BUILD_ROOT%{_jvmdir}
 cp -a ${jdk_image} $RPM_BUILD_ROOT%{_jvmdir}/%{sdkdir -- $suffix}
 
 pushd ${jdk_image}
 
+# tbd in rpms
 %if %{with_systemtap}
   # Install systemtap support files
   install -dm 755 $RPM_BUILD_ROOT%{_jvmdir}/%{sdkdir -- $suffix}/tapset
@@ -1402,11 +1433,13 @@ pushd ${jdk_image}
   done
 %endif
 
+# tbd in rpms
   # Install version-ed symlinks
   pushd $RPM_BUILD_ROOT%{_jvmdir}
     ln -sf %{sdkdir -- $suffix} %{jrelnk -- $suffix}
   popd
 
+# todo fix in build
   # Install man pages
   install -d -m 755 $RPM_BUILD_ROOT%{_mandir}/man1
   for manpage in man/man1/*
@@ -1422,6 +1455,7 @@ pushd ${jdk_image}
 
 popd
 
+# done in build
 # Install static libs artefacts
 %if %{include_staticlibs}
 mkdir -p $RPM_BUILD_ROOT%{_jvmdir}/%{sdkdir -- $suffix}/%{static_libs_install_dir}
@@ -1429,6 +1463,7 @@ cp -a ${top_dir_abs_staticlibs_build_path}/images/%{static_libs_image}/lib/*.a \
   $RPM_BUILD_ROOT%{_jvmdir}/%{sdkdir -- $suffix}/%{static_libs_install_dir}
 %endif
 
+# todo fix in build
 if ! echo $suffix | grep -q "debug" ; then
   # Install Javadoc documentation
   install -d -m 755 $RPM_BUILD_ROOT%{_javadocdir}
@@ -1438,6 +1473,7 @@ if ! echo $suffix | grep -q "debug" ; then
      $RPM_BUILD_ROOT%{_javadocdir}/%{uniquejavadocdir -- $suffix}.zip || ls -l ${top_dir_abs_main_build_path}/bundles/
 fi
 
+# todo fix in build
 # Install release notes
 commondocdir=${RPM_BUILD_ROOT}%{_defaultdocdir}/%{uniquejavadocdir -- $suffix}
 install -d -m 755 ${commondocdir}
@@ -1450,6 +1486,7 @@ for s in 16 24 32 48 ; do
     $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/${s}x${s}/apps/java-%{javaver}-%{origin}.png
 done
 
+# tbd in rpms
 # Install desktop files
 install -d -m 755 $RPM_BUILD_ROOT%{_datadir}/{applications,pixmaps}
 for e in jconsole$suffix ; do
@@ -1457,14 +1494,17 @@ for e in jconsole$suffix ; do
         --dir=$RPM_BUILD_ROOT%{_datadir}/applications $e.desktop
 done
 
+# tbd in rpms
 # Install /etc/.java/.systemPrefs/ directory
 # See https://bugzilla.redhat.com/show_bug.cgi?id=741821
 mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/.java/.systemPrefs
 
+# todo fix in build
 # copy samples next to demos; samples are mostly js files
 cp -r %{top_level_dir_name}/src/sample  $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/
 
 
+# tbd in rpms
 # moving config files to /etc
 mkdir -p $RPM_BUILD_ROOT/%{etcjavadir -- $suffix}
 mkdir -p $RPM_BUILD_ROOT/%{etcjavadir -- $suffix}/lib
@@ -1478,6 +1518,7 @@ pushd $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/lib
 popd
 # end moving files to /etc
 
+# todo fix in build
 # stabilize permissions
 find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/ -name "*.so" -exec chmod 755 {} \; ;
 find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/ -type d -exec chmod 755 {} \; ;
@@ -1485,6 +1526,7 @@ find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/legal -type f -exec chmod 6
 
 # end, dual install
 done
+fi
 
 %check
 
@@ -1493,7 +1535,9 @@ for suffix in %{build_loop} ; do
 
 # Tests in the check stage are performed on the installed image
 # rpmbuild operates as follows: build -> install -> test
-export JAVA_HOME=${RPM_BUILD_ROOT}%{_jvmdir}/%{sdkdir -- $suffix}
+# however in portbales, we test built image instead of installed one
+top_dir_abs_main_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{main_suffix}}
+export JAVA_HOME=${top_dir_abs_main_build_path}/images/%{jdkimage}
 
 #check Shenandoah is enabled
 %if %{use_shenandoah_hotspot}
@@ -1564,7 +1608,7 @@ done
 # main package builds always
 %{_jvmdir}/%{jreportablearchive -- %%{nil}}
 %{_jvmdir}/%{jreportablearchive -- %%{nil}}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
+%license %{unpacked_licenses}/%{jdkportablearchive -- %%{nil}}
 %else
 %files
 # placeholder
@@ -1575,31 +1619,31 @@ done
 %{_jvmdir}/%{jdkportablearchive -- .debuginfo}
 %{_jvmdir}/%{jdkportablearchive -- %%{nil}}.sha256sum
 %{_jvmdir}/%{jdkportablearchive -- .debuginfo}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
+%license %{unpacked_licenses}/%{jdkportablearchive -- %%{nil}}
 
 %if %{include_staticlibs}
 %files static-libs
 %{_jvmdir}/%{staticlibsportablearchive -- %%{nil}}
 %{_jvmdir}/%{staticlibsportablearchive -- %%{nil}}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- %%{nil}}
+%license %{unpacked_licenses}/%{jdkportablearchive -- %%{nil}}
 %endif
 
 %if %{include_debug_build}
 %files slowdebug
 %{_jvmdir}/%{jreportablearchive -- .slowdebug}
 %{_jvmdir}/%{jreportablearchive -- .slowdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .slowdebug}
 
 %files devel-slowdebug
 %{_jvmdir}/%{jdkportablearchive -- .slowdebug}
 %{_jvmdir}/%{jdkportablearchive -- .slowdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .slowdebug}
 
 %if %{include_staticlibs}
 %files static-libs-slowdebug
 %{_jvmdir}/%{staticlibsportablearchive -- .slowdebug}
 %{_jvmdir}/%{staticlibsportablearchive -- .slowdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .slowdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .slowdebug}
 %endif
 %endif
 
@@ -1607,18 +1651,18 @@ done
 %files fastdebug
 %{_jvmdir}/%{jreportablearchive -- .fastdebug}
 %{_jvmdir}/%{jreportablearchive -- .fastdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .fastdebug}
 
 %files devel-fastdebug
 %{_jvmdir}/%{jdkportablearchive -- .fastdebug}
 %{_jvmdir}/%{jdkportablearchive -- .fastdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .fastdebug}
 
 %if %{include_staticlibs}
 %files static-libs-fastdebug
 %{_jvmdir}/%{staticlibsportablearchive -- .fastdebug}
 %{_jvmdir}/%{staticlibsportablearchive -- .fastdebug}.sha256sum
-%license %{unpacked_lilcenses}/%{jdkportablearchive -- .fastdebug}
+%license %{unpacked_licenses}/%{jdkportablearchive -- .fastdebug}
 %endif
 %endif
 
