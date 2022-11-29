@@ -1391,7 +1391,7 @@ for suffix in %{build_loop} ; do
   popd #staticlibs-images
 %endif
 ################################################################################
-# note, currently no debuginfo, consult portbale spec for external (zipped) debuginof, being tarred alone
+# note, currently no debuginfo, consult portbale spec for external (zipped) debuginfo, being tarred alone
 ################################################################################
 
 # build cycles
@@ -1582,7 +1582,7 @@ $JAVA_HOME/bin/java -Djava.locale.providers=CLDR $(echo $(basename %{SOURCE18})|
 
 %if %{include_staticlibs}
 # Check debug symbols in static libraries (smoke test)
-export STATIC_LIBS_HOME=${JAVA_HOME}/%{static_libs_install_dir}
+export STATIC_LIBS_HOME=${top_dir_abs_main_build_path}/../../%{buildoutputdir -- ${suffix}%{staticlibs_suffix}}/images/static-libs/lib/
 readelf --debug-dump $STATIC_LIBS_HOME/libfdlibm.a | grep w_remainder.c
 readelf --debug-dump $STATIC_LIBS_HOME/libfdlibm.a | grep e_remainder.c
 %endif
