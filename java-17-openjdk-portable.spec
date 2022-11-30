@@ -1368,16 +1368,21 @@ for suffix in %{build_loop} ; do
 
 ################################################################################
   pushd ${top_dir_abs_main_build_path}/images
-    mv %{jdkimage} %{jdkportablename -- "$suffix"}
-    mv %{jreimage} %{jreportablename -- "$suffix"}
-    tar -cJf ../../../../%{jdkportablearchive -- "$suffix"}  --exclude='**.debuginfo' %{jdkportablename -- "$suffix"}
-    sha256sum ../../../../%{jdkportablearchive -- "$suffix"} > ../../../../%{jdkportablearchive -- "$suffix"}.sha256sum
-    tar -cJf ../../../../%{jreportablearchive -- "$suffix"}  --exclude='**.debuginfo' %{jreportablename -- "$suffix"}
-    sha256sum ../../../../%{jreportablearchive -- "$suffix"} > ../../../../%{jreportablearchive -- "$suffix"}.sha256sum
+  if [ "x$suffix" == "x" ] ; then
+    nameSuffix=""
+  else
+    nameSuffix=`echo "$suffix"| sed s/-/./`
+  fi
+    mv %{jdkimage} %{jdkportablename -- "$nameSuffix"}
+    mv %{jreimage} %{jreportablename -- "$nameSuffix"}
+    tar -cJf ../../../../%{jdkportablearchive -- "$nameSuffix"}  --exclude='**.debuginfo' %{jdkportablename -- "$nameSuffix"}
+    sha256sum ../../../../%{jdkportablearchive -- "$nameSuffix"} > ../../../../%{jdkportablearchive -- "$nameSuffix"}.sha256sum
+    tar -cJf ../../../../%{jreportablearchive -- "$nameSuffix"}  --exclude='**.debuginfo' %{jreportablename -- "$nameSuffix"}
+    sha256sum ../../../../%{jreportablearchive -- "$nameSuffix"} > ../../../../%{jreportablearchive -- "$nameSuffix"}.sha256sum
     # copy licenses so they are avialable out of tarball
-    cp -rf  %{jdkportablename -- "$suffix"}/legal  ../../../../%{jdkportablearchive -- "%{normal_suffix}"}-legal
-    mv %{jdkportablename -- "$suffix"} %{jdkimage}
-    mv %{jreportablename -- "$suffix"} %{jreimage}
+    cp -rf  %{jdkportablename -- "$nameSuffix"}/legal  ../../../../%{jdkportablearchive -- "%{normal_suffix}"}-legal
+    mv %{jdkportablename -- "$nameSuffix"} %{jdkimage}
+    mv %{jreportablename -- "$nameSuffix"} %{jreimage}
   popd #images
 %if %{include_staticlibs}
   top_dir_abs_staticlibs_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{staticlibs_suffix}}
@@ -1385,9 +1390,9 @@ for suffix in %{build_loop} ; do
     # Static libraries (needed for building graal vm with native image)
     # Tar as overlay. Transform to the JDK name, since we just want to "add"
     # static libraries to that folder
-    portableJDKname=%{staticlibsportablename -- "$suffix"}
-    tar -cJf ../../../../%{staticlibsportablearchive -- "$suffix"} --transform "s|^%{static_libs_image}/lib/*|$portableJDKname/lib/static/linux-%{archinstall}/glibc/|" "%{static_libs_image}/lib"
-    sha256sum ../../../../%{staticlibsportablearchive -- "$suffix"} > ../../../../%{staticlibsportablearchive -- "$suffix"}.sha256sum
+    portableJDKname=%{staticlibsportablename -- "$nameSuffix"}
+    tar -cJf ../../../../%{staticlibsportablearchive -- "$nameSuffix"} --transform "s|^%{static_libs_image}/lib/*|$portableJDKname/lib/static/linux-%{archinstall}/glibc/|" "%{static_libs_image}/lib"
+    sha256sum ../../../../%{staticlibsportablearchive -- "$nameSuffix"} > ../../../../%{staticlibsportablearchive -- "$nameSuffix"}.sha256sum
   popd #staticlibs-images
 %endif
 ################################################################################
