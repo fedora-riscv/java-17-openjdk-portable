@@ -1400,11 +1400,12 @@ done # end of release / debug cycle loop
 %install
 STRIP_KEEP_SYMTAB=libjvm*
 
-if [ "fixme" == "todo" ] ; then
+
 for suffix in %{build_loop} ; do
+top_dir_abs_main_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{main_suffix}}
+if [ "fixme" == "todo" ] ; then  #todo, extract some parts to build, drop the rest - but keep it in rpms after repack
 
 # done in build
-top_dir_abs_main_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{main_suffix}}
 %if %{include_staticlibs}
 top_dir_abs_staticlibs_build_path=$(pwd)/%{buildoutputdir -- ${suffix}%{staticlibs_loop}}
 %endif
@@ -1524,9 +1525,39 @@ find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/ -name "*.so" -exec chmod 7
 find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/ -type d -exec chmod 755 {} \; ;
 find $RPM_BUILD_ROOT/%{_jvmdir}/%{sdkdir -- $suffix}/legal -type f -exec chmod 644 {} \; ;
 
+fi # fixme, todo
+
+################################################################################
+  if [ "x$suffix" == "x" ] ; then
+    nameSuffix=""
+  else
+    nameSuffix=`echo "$suffix"| sed s/-/./`
+  fi
+  mkdir -p $RPM_BUILD_ROOT%{_jvmdir}
+  mv ../%{jdkportablearchive -- "$nameSuffix"} $RPM_BUILD_ROOT%{_jvmdir}/
+  mv ../%{jdkportablearchive -- "$nameSuffix"}.sha256sum $RPM_BUILD_ROOT%{_jvmdir}/
+  mv ../%{jreportablearchive -- "$nameSuffix"} $RPM_BUILD_ROOT%{_jvmdir}/
+  mv ../%{jreportablearchive -- "$nameSuffix"}.sha256sum $RPM_BUILD_ROOT%{_jvmdir}/
+%if %{include_staticlibs}
+  mv ../%{staticlibsportablearchive -- "$nameSuffix"} $RPM_BUILD_ROOT%{_jvmdir}/
+  mv ../%{staticlibsportablearchive -- "$nameSuffix"}.sha256sum $RPM_BUILD_ROOT%{_jvmdir}/
+%endif
+  if [ "x$suffix" == "x" ] ; then
+      dnameSuffix="$nameSuffix".debuginfo
+# todo handle debuginfo, see note at build (we will need to pack one stripped and one unstripped release build)
+#      mv ../%{jdkportablearchive -- "$dnameSuffix"} $RPM_BUILD_ROOT%{_jvmdir}/
+#      mv ../%{jdkportablearchive -- "$dnameSuffix"}.sha256sum $RPM_BUILD_ROOT%{_jvmdir}/
+  fi
+################################################################################
 # end, dual install
 done
-fi
+################################################################################
+# the licenses are packed onloy once and shared
+mkdir -p $RPM_BUILD_ROOT%{unpacked_licenses}
+mv ../%{jdkportablearchive -- "%{normal_suffix}"}-legal $RPM_BUILD_ROOT%{unpacked_licenses}/%{jdkportablearchive -- "%{normal_suffix}"}
+# To show sha in the build log
+for file in `ls $RPM_BUILD_ROOT%{_jvmdir}/*.sha256sum` ; do ls -l $file ; cat $file ; done
+################################################################################
 
 %check
 
@@ -1616,9 +1647,9 @@ done
 
 %files devel
 %{_jvmdir}/%{jdkportablearchive -- %%{nil}}
-%{_jvmdir}/%{jdkportablearchive -- .debuginfo}
+#%{_jvmdir}/%{jdkportablearchive -- .debuginfo}
 %{_jvmdir}/%{jdkportablearchive -- %%{nil}}.sha256sum
-%{_jvmdir}/%{jdkportablearchive -- .debuginfo}.sha256sum
+#%{_jvmdir}/%{jdkportablearchive -- .debuginfo}.sha256sum
 %license %{unpacked_licenses}/%{jdkportablearchive -- %%{nil}}
 
 %if %{include_staticlibs}
