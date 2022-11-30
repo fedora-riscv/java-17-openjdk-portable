@@ -1,8 +1,5 @@
-#FOR TESTING ONLY! REMOVE!
-%define rhel %{nil}
-
 %if (0%{?rhel} > 0 && 0%{?rhel} < 8)
-# portable jdk 17 specific bug, _jvmdir being missing
+# portable jdk 17 specific bug, _jvmdir being missing on el7
 %define _jvmdir /usr/lib/jvm
 %endif
 
