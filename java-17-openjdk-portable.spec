@@ -391,8 +391,8 @@
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        1
-%global rpmrelease      2
+%global buildver        9
+%global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -700,8 +700,6 @@ Patch1001: fips-17u-%{fipsver}.patch
 # OpenJDK patches targetted for 17.0.6
 #
 #############################################
-# JDK-8293834: Update CLDR data following tzdata 2022c update
-Patch2001: jdk8293834-kyiv_cldr_update.patch
 
 BuildRequires: autoconf
 BuildRequires: automake
@@ -758,8 +756,8 @@ BuildRequires: java-%{buildjdkver}-openjdk-devel
 %ifarch %{zero_arches}
 BuildRequires: libffi-devel
 %endif
-# 2022e required as of JDK-8295173
-BuildRequires: tzdata-java >= 2022e
+# 2022g required as of JDK-8297804
+BuildRequires: tzdata-java >= 2022g
 
 # cacerts build requirement in portable mode
 BuildRequires: ca-certificates
@@ -964,8 +962,6 @@ pushd %{top_level_dir_name}
 %patch1001 -p1
 # nss.cfg PKCS11 support; must come last as it also alters java.security
 %patch1000 -p1
-# tzdata updates targetted for 17.0.6
-%patch2001 -p1
 popd # openjdk
 
 %patch600
@@ -1585,7 +1581,14 @@ done
 %endif
 
 %changelog
-* Wed Nov 23 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.1-0.2.ea
+* Thu Jan 19 2023 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.9-0.1.ea
+- Update to jdk-17.0.6+9
+- Update release notes to 17.0.6+9
+- Drop local copy of JDK-8293834 now this is upstream
+- Require tzdata 2022g due to inclusion of JDK-8296108, JDK-8296715 & JDK-8297804
+- Update TestTranslations.java to test the new America/Ciudad_Juarez zone
+
+* Thu Jan 19 2023 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.1-0.2.ea
 - Update FIPS support to bring in latest changes
 - * Add nss.fips.cfg support to OpenJDK tree
 - * RH2117972: Extend the support for NSS DBs (PKCS11) in FIPS mode
