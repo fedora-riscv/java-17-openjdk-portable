@@ -2644,7 +2644,7 @@ index 00000000000..55bbba98b7a
 +attributes(*,CKO_SECRET_KEY,CKK_GENERIC_SECRET)={ CKA_SIGN=true }
 +
 diff --git a/src/java.base/share/lib/security/default.policy b/src/java.base/share/lib/security/default.policy
-index b22f26947af..3ee2ce6ea88 100644
+index b22f26947af..02bea84e210 100644
 --- a/src/java.base/share/lib/security/default.policy
 +++ b/src/java.base/share/lib/security/default.policy
 @@ -121,6 +121,7 @@ grant codeBase "jrt:/jdk.charsets" {
@@ -2663,6 +2663,15 @@ index b22f26947af..3ee2ce6ea88 100644
      permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.misc";
      permission java.lang.RuntimePermission
                     "accessClassInPackage.sun.security.*";
+@@ -140,6 +142,8 @@ grant codeBase "jrt:/jdk.crypto.cryptoki" {
+     permission java.util.PropertyPermission "os.name", "read";
+     permission java.util.PropertyPermission "os.arch", "read";
+     permission java.util.PropertyPermission "jdk.crypto.KeyAgreement.legacyKDF", "read";
++    permission java.util.PropertyPermission "fips.nssdb.path", "read,write";
++    permission java.util.PropertyPermission "fips.nssdb.pin", "read";
+     permission java.security.SecurityPermission "putProviderProperty.*";
+     permission java.security.SecurityPermission "clearProviderProperties.*";
+     permission java.security.SecurityPermission "removeProviderProperty.*";
 diff --git a/src/java.base/share/native/libsystemconf/systemconf.c b/src/java.base/share/native/libsystemconf/systemconf.c
 new file mode 100644
 index 00000000000..ddf9befe5bc
@@ -4120,7 +4129,7 @@ index 262cfc062ad..72b64f72c0a 100644
          Provider p = sun;
          if (p == null) {
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
-index aa35e8fa668..f4d7c9cc201 100644
+index aa35e8fa668..1855e5631bd 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
 @@ -26,6 +26,9 @@
@@ -4186,7 +4195,7 @@ index aa35e8fa668..f4d7c9cc201 100644
      private static final long serialVersionUID = -1354835039035306505L;
  
      static final Debug debug = Debug.getInstance("sunpkcs11");
-@@ -115,6 +153,18 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -115,6 +153,29 @@ public final class SunPKCS11 extends AuthProvider {
              return AccessController.doPrivileged(new PrivilegedExceptionAction<>() {
                  @Override
                  public SunPKCS11 run() throws Exception {
@@ -4197,15 +4206,26 @@ index aa35e8fa668..f4d7c9cc201 100644
 +                         * fips.nssdb.path System property after expansion.
 +                         * Security properties expansion is unsupported.
 +                         */
-+                        System.setProperty(
-+                                FIPS_NSSDB_PATH_PROP,
++                        String nssdbPath =
 +                                SecurityProperties.privilegedGetOverridable(
-+                                        FIPS_NSSDB_PATH_PROP));
++                                        FIPS_NSSDB_PATH_PROP);
++                        if (System.getSecurityManager() != null) {
++                            AccessController.doPrivileged(
++                                    (PrivilegedAction<Void>) () -> {
++                                        System.setProperty(
++                                                FIPS_NSSDB_PATH_PROP,
++                                                nssdbPath);
++                                        return null;
++                                    });
++                        } else {
++                            System.setProperty(
++                                    FIPS_NSSDB_PATH_PROP, nssdbPath);
++                        }
 +                    }
                      return new SunPKCS11(new Config(newConfigName));
                  }
              });
-@@ -320,10 +370,19 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -320,10 +381,19 @@ public final class SunPKCS11 extends AuthProvider {
              // request multithreaded access first
              initArgs.flags = CKF_OS_LOCKING_OK;
              PKCS11 tmpPKCS11;
@@ -4226,7 +4246,7 @@ index aa35e8fa668..f4d7c9cc201 100644
              } catch (PKCS11Exception e) {
                  if (debug != null) {
                      debug.println("Multi-threaded initialization failed: " + e);
-@@ -339,11 +398,12 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -339,11 +409,12 @@ public final class SunPKCS11 extends AuthProvider {
                      initArgs.flags = 0;
                  }
                  tmpPKCS11 = PKCS11.getInstance(library,
@@ -4241,7 +4261,7 @@ index aa35e8fa668..f4d7c9cc201 100644
              if (p11Info.cryptokiVersion.major < 2) {
                  throw new ProviderException("Only PKCS#11 v2.0 and later "
                  + "supported, library version is v" + p11Info.cryptokiVersion);
-@@ -417,14 +477,19 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -417,14 +488,19 @@ public final class SunPKCS11 extends AuthProvider {
          final String className;
          final List<String> aliases;
          final int[] mechanisms;
@@ -4262,7 +4282,7 @@ index aa35e8fa668..f4d7c9cc201 100644
          }
          private P11Service service(Token token, int mechanism) {
              return new P11Service
-@@ -458,18 +523,29 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -458,18 +534,29 @@ public final class SunPKCS11 extends AuthProvider {
  
      private static void d(String type, String algorithm, String className,
              int[] m) {
@@ -4295,7 +4315,7 @@ index aa35e8fa668..f4d7c9cc201 100644
      }
  
      private static void register(Descriptor d) {
-@@ -525,6 +601,7 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -525,6 +612,7 @@ public final class SunPKCS11 extends AuthProvider {
          String P11Cipher           = "sun.security.pkcs11.P11Cipher";
          String P11RSACipher        = "sun.security.pkcs11.P11RSACipher";
          String P11AEADCipher       = "sun.security.pkcs11.P11AEADCipher";
@@ -4303,7 +4323,7 @@ index aa35e8fa668..f4d7c9cc201 100644
          String P11Signature        = "sun.security.pkcs11.P11Signature";
          String P11PSSSignature     = "sun.security.pkcs11.P11PSSSignature";
  
-@@ -587,6 +664,30 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -587,6 +675,30 @@ public final class SunPKCS11 extends AuthProvider {
          d(MAC, "SslMacSHA1",    P11Mac,
                  m(CKM_SSL3_SHA1_MAC));
  
@@ -4334,7 +4354,7 @@ index aa35e8fa668..f4d7c9cc201 100644
          d(KPG, "RSA",           P11KeyPairGenerator,
                  getAliases("PKCS1"),
                  m(CKM_RSA_PKCS_KEY_PAIR_GEN));
-@@ -685,6 +786,66 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -685,6 +797,66 @@ public final class SunPKCS11 extends AuthProvider {
          d(SKF, "ChaCha20",      P11SecretKeyFactory,
                  m(CKM_CHACHA20_POLY1305));
  
@@ -4401,7 +4421,7 @@ index aa35e8fa668..f4d7c9cc201 100644
          // XXX attributes for Ciphers (supported modes, padding)
          dA(CIP, "ARCFOUR",                      P11Cipher,
                  m(CKM_RC4));
-@@ -754,6 +915,46 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -754,6 +926,46 @@ public final class SunPKCS11 extends AuthProvider {
          d(CIP, "RSA/ECB/NoPadding",             P11RSACipher,
                  m(CKM_RSA_X_509));
  
@@ -4448,7 +4468,7 @@ index aa35e8fa668..f4d7c9cc201 100644
          d(SIG, "RawDSA",        P11Signature,
                  List.of("NONEwithDSA"),
                  m(CKM_DSA));
-@@ -1144,9 +1345,21 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1144,9 +1356,21 @@ public final class SunPKCS11 extends AuthProvider {
              if (ds == null) {
                  continue;
              }
@@ -4470,7 +4490,13 @@ index aa35e8fa668..f4d7c9cc201 100644
                      supportedAlgs.put(d, integerMech);
                      continue;
                  }
-@@ -1225,6 +1438,27 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1220,11 +1444,52 @@ public final class SunPKCS11 extends AuthProvider {
+         }
+ 
+         @Override
++        @SuppressWarnings("removal")
+         public Object newInstance(Object param)
+                 throws NoSuchAlgorithmException {
              if (token.isValid() == false) {
                  throw new NoSuchAlgorithmException("Token has been removed");
              }
@@ -4488,7 +4514,26 @@ index aa35e8fa668..f4d7c9cc201 100644
 +                 * property.
 +                 */
 +                try {
-+                    token.ensureLoggedIn(null);
++                    if (System.getSecurityManager() != null) {
++                        try {
++                            AccessController.doPrivileged(
++                                    (PrivilegedExceptionAction<Void>) () -> {
++                                        token.ensureLoggedIn(null);
++                                        return null;
++                                    });
++                        } catch (PrivilegedActionException pae) {
++                            Exception e = pae.getException();
++                            if (e instanceof LoginException le) {
++                                throw le;
++                            } else if (e instanceof PKCS11Exception p11e) {
++                                throw p11e;
++                            } else {
++                                throw new RuntimeException(e);
++                            }
++                        }
++                    } else {
++                        token.ensureLoggedIn(null);
++                    }
 +                } catch (PKCS11Exception | LoginException e) {
 +                    throw new ProviderException("FIPS: error during the Token" +
 +                            " login required for the " + getType() +
@@ -4498,7 +4543,7 @@ index aa35e8fa668..f4d7c9cc201 100644
              try {
                  return newInstance0(param);
              } catch (PKCS11Exception e) {
-@@ -1244,6 +1478,8 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1244,6 +1509,8 @@ public final class SunPKCS11 extends AuthProvider {
                  } else if (algorithm.endsWith("GCM/NoPadding") ||
                             algorithm.startsWith("ChaCha20-Poly1305")) {
                      return new P11AEADCipher(token, algorithm, mechanism);
@@ -4507,7 +4552,7 @@ index aa35e8fa668..f4d7c9cc201 100644
                  } else {
                      return new P11Cipher(token, algorithm, mechanism);
                  }
-@@ -1579,6 +1815,9 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1579,6 +1846,9 @@ public final class SunPKCS11 extends AuthProvider {
          try {
              session = token.getOpSession();
              p11.C_Logout(session.id());

@@ -384,14 +384,14 @@
 # Define IcedTea version used for SystemTap tapsets and desktop file
 %global icedteaver      6.0.0pre00-c848b93a8598
 # Define current Git revision for the FIPS support patches
-%global fipsver 72d08e3226f
+%global fipsver 257d544b594
 
 # Standard JPackage naming and versioning defines
 %global origin          openjdk
 %global origin_nice     OpenJDK
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
-%global buildver        9
+%global buildver        10
 %global rpmrelease      1
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
@@ -418,7 +418,7 @@
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
 # - N%%{?extraver}{?dist} for GA releases
-%global is_ga           0
+%global is_ga           1
 %if %{is_ga}
 %global build_type GA
 %global ea_designator ""
@@ -554,7 +554,7 @@ ExcludeArch: %{ix86}
 
 Name:    java-%{javaver}-%{origin}-portable
 Version: %{newjavaver}.%{buildver}
-Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}.1
+Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -687,6 +687,7 @@ Patch6: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-d
 # Add nss.fips.cfg support to OpenJDK tree
 # RH2117972: Extend the support for NSS DBs (PKCS11) in FIPS mode
 # Remove forgotten dead code from RH2020290 and RH2104724
+# OJ1357: Fix issue on FIPS with a SecurityManager in place
 Patch1001: fips-17u-%{fipsver}.patch
 
 #############################################
@@ -1581,6 +1582,15 @@ done
 %endif
 
 %changelog
+* Thu Jan 26 2023 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.10-1
+- Update to jdk-17.0.6.0+10
+- Update release notes to 17.0.6.0+10
+- Switch to GA mode for release
+
+* Thu Jan 19 2023 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.9-0.2.ea
+- Update FIPS support to bring in latest changes
+- * OJ1357: Fix issue on FIPS with a SecurityManager in place
+
 * Thu Jan 19 2023 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.9-0.1.ea
 - Update to jdk-17.0.6+9
 - Update release notes to 17.0.6+9

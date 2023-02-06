@@ -9,6 +9,21 @@ Live versions of these release notes can be found at:
   * https://bitly.com/openjdk1706
   * https://builds.shipilev.net/backports-monitor/release-notes-17.0.6.html
 
+* CVEs
+  - CVE-2023-21835
+  - CVE-2023-21843
+* Security fixes
+  - JDK-8286070: Improve UTF8 representation
+  - JDK-8286496: Improve Thread labels
+  - JDK-8287411: Enhance DTLS performance
+  - JDK-8288516: Enhance font creation
+  - JDK-8289350: Better media supports
+  - JDK-8293554: Enhanced DH Key Exchanges
+  - JDK-8293598: Enhance InetAddress address handling
+  - JDK-8293717: Objective view of ObjectView
+  - JDK-8293734: Improve BMP image handling
+  - JDK-8293742: Better Banking of Sounds
+  - JDK-8295687: Better BMP bounds
 * Other changes
   - JDK-6829250: Reg test: java/awt/Toolkit/ScreenInsetsTest/ScreenInsetsTest.java fails in Windows
   - JDK-7001973: java/awt/Graphics2D/CopyAreaOOB.java fails
@@ -252,10 +267,12 @@ Live versions of these release notes can be found at:
   - JDK-8295554: Move the "sizecalc.h" to the correct location
   - JDK-8295641: Fix DEFAULT_PROMOTED_VERSION_PRE=ea for -dev
   - JDK-8295714: GHA ::set-output is deprecated and will be removed
+  - JDK-8295723: security/infra/wycheproof/RunWycheproof.java fails with Assertion Error
   - JDK-8295872: [PPC64] JfrGetCallTrace: Need pc == nullptr check before frame constructor
   - JDK-8295952: Problemlist existing compiler/rtm tests also on x86
   - JDK-8296083: javax/swing/JTree/6263446/bug6263446.java fails intermittently on a VM
   - JDK-8296108: (tz) Update Timezone Data to 2022f
+  - JDK-8296239: ISO 4217 Amendment 174 Update
   - JDK-8296480: java/security/cert/pkix/policyChanges/TestPolicy.java is failing
   - JDK-8296485: BuildEEBasicConstraints.java test fails with SunCertPathBuilderException
   - JDK-8296496: Overzealous check in sizecalc.h prevents large memory allocation
@@ -278,9 +295,32 @@ Live versions of these release notes can be found at:
   - JDK-8297590: [TESTBUG] HotSpotResolvedJavaFieldTest does not run
   - JDK-8297656: AArch64: Enable AES/GCM Intrinsics
   - JDK-8297804: (tz) Update Timezone Data to 2022g
+  - JDK-8299392: [17u] Remove designator DEFAULT_PROMOTED_VERSION_PRE=ea for release 17.0.6
+  - JDK-8299439: java/text/Format/NumberFormat/CurrencyFormat.java fails for hr_HR
+  - JDK-8299483: ProblemList java/text/Format/NumberFormat/CurrencyFormat.java
 
 Notes on individual issues:
 ===========================
+
+client-libs/javax.imageio:
+
+JDK-8295687: Better BMP bounds
+==============================
+Loading a linked ICC profile within a BMP image is now disabled by
+default. To re-enable it, set the new system property
+`sun.imageio.bmp.enabledLinkedProfiles` to `true`.  This new property
+replaces the old property,
+`sun.imageio.plugins.bmp.disableLinkedProfiles`.
+
+client-libs/javax.sound:
+
+JDK-8293742: Better Banking of Sounds
+=====================================
+Previously, the SoundbankReader implementation,
+`com.sun.media.sound.JARSoundbankReader`, would download a JAR
+soundbank from a URL.  This behaviour is now disabled by default. To
+re-enable it, set the new system property `jdk.sound.jarsoundbank` to
+`true`.
 
 security-libs/java.security:
 
@@ -301,6 +341,14 @@ and an implementation note added to the specification to suggest that
 the same change is made in third party modules.  Developers of third
 party modules are advised to verify that their logout() method does not
 throw a NullPointerException.
+
+security-libs/javax.net.ssl:
+
+JDK-8287411: Enhance DTLS performance
+=====================================
+The JDK now exchanges DTLS cookies for all handshakes, new and
+resumed. The previous behaviour can be re-enabled by setting the new
+system property `jdk.tls.enableDtlsResumeCookie` to `false`.
 
 New in release OpenJDK 17.0.5 (2022-10-18):
 ===========================================
