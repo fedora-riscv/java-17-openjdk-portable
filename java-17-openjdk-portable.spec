@@ -384,7 +384,7 @@
 # Define IcedTea version used for SystemTap tapsets and desktop file
 %global icedteaver      6.0.0pre00-c848b93a8598
 # Define current Git revision for the FIPS support patches
-%global fipsver 0bd5ca9ccc5
+%global fipsver 72d08e3226f
 
 # Standard JPackage naming and versioning defines
 %global origin          openjdk
@@ -392,7 +392,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        1
-%global rpmrelease      1
+%global rpmrelease      2
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -625,9 +625,6 @@ Source15: TestSecurityProperties.java
 # Ensure vendor settings are correct
 Source16: CheckVendor.java
 
-# nss fips configuration file
-Source17: nss.fips.cfg.in
-
 # Ensure translations are available for new timezones
 Source18: TestTranslations.java
 
@@ -687,6 +684,9 @@ Patch6: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-d
 # Build the systemconf library on all platforms
 # RH2048582: Support PKCS#12 keystores
 # RH2020290: Support TLS 1.3 in FIPS mode
+# Add nss.fips.cfg support to OpenJDK tree
+# RH2117972: Extend the support for NSS DBs (PKCS11) in FIPS mode
+# Remove forgotten dead code from RH2020290 and RH2104724
 Patch1001: fips-17u-%{fipsver}.patch
 
 #############################################
@@ -1025,9 +1025,6 @@ done
 # Setup nss.cfg
 sed -e "s:@NSS_LIBDIR@:%{NSS_LIBDIR}:g" %{SOURCE11} > nss.cfg
 
-# Setup nss.fips.cfg
-sed -e "s:@NSS_LIBDIR@:%{NSS_LIBDIR}:g" %{SOURCE17} > nss.fips.cfg
-
 %build
 %if (0%{?rhel} > 0 && 0%{?rhel} < 8)
 mkdir bootjdk
@@ -1189,9 +1186,6 @@ function installjdk() {
 
         # Install nss.cfg right away as we will be using the JRE above
         install -m 644 nss.cfg ${imagepath}/conf/security/
-
-        # Install nss.fips.cfg: NSS configuration for global FIPS mode (crypto-policies)
-        install -m 644 nss.fips.cfg ${imagepath}/conf/security/
 
         # Create fake alt-java as a placeholder for future alt-java
 		if [ -d man/man1 ] ; then
@@ -1591,6 +1585,13 @@ done
 %endif
 
 %changelog
+* Wed Nov 23 2022 Andrew Hughes <gnu.andrew@redhat.com> - 1:17.0.6.0.1-0.2.ea
+- Update FIPS support to bring in latest changes
+- * Add nss.fips.cfg support to OpenJDK tree
+- * RH2117972: Extend the support for NSS DBs (PKCS11) in FIPS mode
+- * Remove forgotten dead code from RH2020290 and RH2104724
+- Drop local nss.fips.cfg.in handling now this is handled in the patched OpenJDK build
+
 * Thu Jan 19 2023 Fedora Release Engineering <releng@fedoraproject.org> - 1:17.0.6.0.1-0.1.ea.1
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_38_Mass_Rebuild
 

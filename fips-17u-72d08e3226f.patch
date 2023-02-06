@@ -1,9 +1,33 @@
+diff --git a/make/autoconf/build-aux/pkg.m4 b/make/autoconf/build-aux/pkg.m4
+index 5f4b22bb27f..1ca9f5b8ffe 100644
+--- a/make/autoconf/build-aux/pkg.m4
++++ b/make/autoconf/build-aux/pkg.m4
+@@ -179,3 +179,19 @@ else
+ 	ifelse([$3], , :, [$3])
+ fi[]dnl
+ ])# PKG_CHECK_MODULES
++
++dnl PKG_CHECK_VAR(VARIABLE, MODULE, CONFIG-VARIABLE,
++dnl [ACTION-IF-FOUND], [ACTION-IF-NOT-FOUND])
++dnl -------------------------------------------
++dnl Since: 0.28
++dnl
++dnl Retrieves the value of the pkg-config variable for the given module.
++AC_DEFUN([PKG_CHECK_VAR],
++[AC_REQUIRE([PKG_PROG_PKG_CONFIG])dnl
++AC_ARG_VAR([$1], [value of $3 for $2, overriding pkg-config])dnl
++
++_PKG_CONFIG([$1], [variable="][$3]["], [$2])
++AS_VAR_COPY([$1], [pkg_cv_][$1])
++
++AS_VAR_IF([$1], [""], [$5], [$4])dnl
++])dnl PKG_CHECK_VAR
 diff --git a/make/autoconf/lib-sysconf.m4 b/make/autoconf/lib-sysconf.m4
 new file mode 100644
-index 00000000000..b2b1c1787da
+index 00000000000..f48fc7f7e80
 --- /dev/null
 +++ b/make/autoconf/lib-sysconf.m4
-@@ -0,0 +1,84 @@
+@@ -0,0 +1,87 @@
 +#
 +# Copyright (c) 2021, Red Hat, Inc.
 +# DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -38,8 +62,10 @@ index 00000000000..b2b1c1787da
 +  #
 +  # Check for the NSS library
 +  #
++  AC_MSG_CHECKING([for NSS library directory])
++  PKG_CHECK_VAR(NSS_LIBDIR, nss, libdir, [AC_MSG_RESULT([$NSS_LIBDIR])], [AC_MSG_RESULT([not found])])
 +
-+  AC_MSG_CHECKING([whether to use the system NSS library with the System Configurator (libsysconf)])
++  AC_MSG_CHECKING([whether to link the system NSS library with the System Configurator (libsysconf)])
 +
 +  # default is not available
 +  DEFAULT_SYSCONF_NSS=no
@@ -87,6 +113,7 @@ index 00000000000..b2b1c1787da
 +      fi
 +  fi
 +  AC_SUBST(USE_SYSCONF_NSS)
++  AC_SUBST(NSS_LIBDIR)
 +])
 diff --git a/make/autoconf/libraries.m4 b/make/autoconf/libraries.m4
 index a65d91ee974..a8f054c1397 100644
@@ -109,20 +136,43 @@ index a65d91ee974..a8f054c1397 100644
    BASIC_JDKLIB_LIBS=""
    if test "x$TOOLCHAIN_TYPE" != xmicrosoft; then
 diff --git a/make/autoconf/spec.gmk.in b/make/autoconf/spec.gmk.in
-index c2c9c4adf3a..9d105b37acf 100644
+index d557549adb3..1cb44bd2595 100644
 --- a/make/autoconf/spec.gmk.in
 +++ b/make/autoconf/spec.gmk.in
-@@ -836,6 +836,10 @@ INSTALL_SYSCONFDIR=@sysconfdir@
+@@ -840,6 +840,11 @@ INSTALL_SYSCONFDIR=@sysconfdir@
  # Libraries
  #
  
 +USE_SYSCONF_NSS:=@USE_SYSCONF_NSS@
 +NSS_LIBS:=@NSS_LIBS@
 +NSS_CFLAGS:=@NSS_CFLAGS@
++NSS_LIBDIR:=@NSS_LIBDIR@
 +
  USE_EXTERNAL_LCMS:=@USE_EXTERNAL_LCMS@
  LCMS_CFLAGS:=@LCMS_CFLAGS@
  LCMS_LIBS:=@LCMS_LIBS@
+diff --git a/make/modules/java.base/Gendata.gmk b/make/modules/java.base/Gendata.gmk
+index 4b894eeae4a..51567071aa8 100644
+--- a/make/modules/java.base/Gendata.gmk
++++ b/make/modules/java.base/Gendata.gmk
+@@ -98,3 +98,17 @@ $(GENDATA_JAVA_SECURITY): $(BUILD_TOOLS_JDK) $(GENDATA_JAVA_SECURITY_SRC) $(REST
+ TARGETS += $(GENDATA_JAVA_SECURITY)
+ 
+ ################################################################################
++
++GENDATA_NSS_FIPS_CFG_SRC := $(TOPDIR)/src/java.base/share/conf/security/nss.fips.cfg.in
++GENDATA_NSS_FIPS_CFG := $(SUPPORT_OUTPUTDIR)/modules_conf/java.base/security/nss.fips.cfg
++
++$(GENDATA_NSS_FIPS_CFG): $(GENDATA_NSS_FIPS_CFG_SRC)
++	$(call LogInfo, Generating nss.fips.cfg)
++	$(call MakeTargetDir)
++	$(call ExecuteWithLog, $(SUPPORT_OUTPUTDIR)/gensrc/java.base/_$(@F), \
++	    ( $(SED) -e 's:@NSS_LIBDIR@:$(NSS_LIBDIR):g' $< ) > $@ \
++	)
++
++TARGETS += $(GENDATA_NSS_FIPS_CFG)
++
++################################################################################
 diff --git a/make/modules/java.base/Lib.gmk b/make/modules/java.base/Lib.gmk
 index 5658ff342e5..c8bc5bde1e1 100644
 --- a/make/modules/java.base/Lib.gmk
@@ -1771,7 +1821,7 @@ index f6d3638c3dd..a1ee182d913 100644
 +    }
  }
 diff --git a/src/java.base/share/classes/module-info.java b/src/java.base/share/classes/module-info.java
-index 63bb580eb3a..dbbf11bbb22 100644
+index 9faee9cae36..27f43550aa4 100644
 --- a/src/java.base/share/classes/module-info.java
 +++ b/src/java.base/share/classes/module-info.java
 @@ -152,6 +152,8 @@ module java.base {
@@ -2193,18 +2243,6 @@ index ca79f25cc44..225517ac69b 100644
          addA(p, "AlgorithmParameters", "RSASSA-PSS",
                  "sun.security.rsa.PSSParameters", null);
      }
-diff --git a/src/java.base/share/classes/sun/security/ssl/SSLContextImpl.java b/src/java.base/share/classes/sun/security/ssl/SSLContextImpl.java
-index 6ffdfeda18d..82e896170f0 100644
---- a/src/java.base/share/classes/sun/security/ssl/SSLContextImpl.java
-+++ b/src/java.base/share/classes/sun/security/ssl/SSLContextImpl.java
-@@ -32,6 +32,7 @@ import java.security.cert.*;
- import java.util.*;
- import java.util.concurrent.locks.ReentrantLock;
- import javax.net.ssl.*;
-+import jdk.internal.access.SharedSecrets;
- import sun.security.action.GetPropertyAction;
- import sun.security.provider.certpath.AlgorithmChecker;
- import sun.security.validator.Validator;
 diff --git a/src/java.base/share/classes/sun/security/util/PBEUtil.java b/src/java.base/share/classes/sun/security/util/PBEUtil.java
 new file mode 100644
 index 00000000000..dc8bc72fccb
@@ -2509,7 +2547,7 @@ index 00000000000..dc8bc72fccb
 +    }
 +}
 diff --git a/src/java.base/share/conf/security/java.security b/src/java.base/share/conf/security/java.security
-index 6d91e3f8e4e..f357b630460 100644
+index 63be286686d..b0a589c3fb4 100644
 --- a/src/java.base/share/conf/security/java.security
 +++ b/src/java.base/share/conf/security/java.security
 @@ -79,6 +79,16 @@ security.provider.tbd=Apple
@@ -2529,7 +2567,7 @@ index 6d91e3f8e4e..f357b630460 100644
  #
  # A list of preferred providers for specific algorithms. These providers will
  # be searched for matching algorithms before the list of registered providers.
-@@ -289,6 +299,11 @@ policy.ignoreIdentityScope=false
+@@ -289,6 +299,47 @@ policy.ignoreIdentityScope=false
  #
  keystore.type=pkcs12
  
@@ -2538,10 +2576,46 @@ index 6d91e3f8e4e..f357b630460 100644
 +#
 +fips.keystore.type=pkcs12
 +
++#
++# Location of the NSS DB keystore (PKCS11) in FIPS mode.
++#
++# The syntax for this property is identical to the 'nssSecmodDirectory'
++# attribute available in the SunPKCS11 NSS configuration file. Use the
++# 'sql:' prefix to refer to an SQLite DB.
++#
++# If the system property fips.nssdb.path is also specified, it supersedes
++# the security property value defined here.
++#
++# Note: the default value for this property points to an NSS DB that might be
++# readable by multiple operating system users and unsuitable to store keys.
++#
++fips.nssdb.path=sql:/etc/pki/nssdb
++
++#
++# PIN for the NSS DB keystore (PKCS11) in FIPS mode.
++#
++# Values must take any of the following forms:
++#   1) pin:<value>
++#        Value: clear text PIN value.
++#   2) env:<value>
++#        Value: environment variable containing the PIN value.
++#   3) file:<value>
++#        Value: path to a file containing the PIN value in its first
++#        line.
++#
++# If the system property fips.nssdb.pin is also specified, it supersedes
++# the security property value defined here.
++#
++# When used as a system property, UTF-8 encoded values are valid. When
++# used as a security property (such as in this file), encode non-Basic
++# Latin Unicode characters with \uXXXX.
++#
++fips.nssdb.pin=pin:
++
  #
  # Controls compatibility mode for JKS and PKCS12 keystore types.
  #
-@@ -326,6 +341,13 @@ package.definition=sun.misc.,\
+@@ -326,6 +377,13 @@ package.definition=sun.misc.,\
  #
  security.overridePropertiesFile=true
  
@@ -2555,6 +2629,20 @@ index 6d91e3f8e4e..f357b630460 100644
  #
  # Determines the default key and trust manager factory algorithms for
  # the javax.net.ssl package.
+diff --git a/src/java.base/share/conf/security/nss.fips.cfg.in b/src/java.base/share/conf/security/nss.fips.cfg.in
+new file mode 100644
+index 00000000000..55bbba98b7a
+--- /dev/null
++++ b/src/java.base/share/conf/security/nss.fips.cfg.in
+@@ -0,0 +1,8 @@
++name = NSS-FIPS
++nssLibraryDirectory = @NSS_LIBDIR@
++nssSecmodDirectory = ${fips.nssdb.path}
++nssDbMode = readWrite
++nssModule = fips
++
++attributes(*,CKO_SECRET_KEY,CKK_GENERIC_SECRET)={ CKA_SIGN=true }
++
 diff --git a/src/java.base/share/lib/security/default.policy b/src/java.base/share/lib/security/default.policy
 index b22f26947af..3ee2ce6ea88 100644
 --- a/src/java.base/share/lib/security/default.policy
@@ -2819,10 +2907,10 @@ index 00000000000..ddf9befe5bc
 +#endif
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSKeyImporter.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSKeyImporter.java
 new file mode 100644
-index 00000000000..8cfa2734d4e
+index 00000000000..d3f0bffb821
 --- /dev/null
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSKeyImporter.java
-@@ -0,0 +1,461 @@
+@@ -0,0 +1,457 @@
 +/*
 + * Copyright (c) 2021, Red Hat, Inc.
 + * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -2896,9 +2984,6 @@ index 00000000000..8cfa2734d4e
 +
 +    private static volatile Provider sunECProvider = null;
 +    private static final ReentrantLock sunECProviderLock = new ReentrantLock();
-+
-+    private static volatile KeyFactory DHKF = null;
-+    private static final ReentrantLock DHKFLock = new ReentrantLock();
 +
 +    static Long importKey(SunPKCS11 sunPKCS11, long hSession, CK_ATTRIBUTE[] attributes)
 +            throws PKCS11Exception {
@@ -3144,8 +3229,7 @@ index 00000000000..8cfa2734d4e
 +                    CKA_PRIVATE_EXPONENT, CKA_PRIME_1, CKA_PRIME_2,
 +                    CKA_EXPONENT_1, CKA_EXPONENT_2, CKA_COEFFICIENT);
 +            RSAPrivateKey rsaPKey = RSAPrivateCrtKeyImpl.newKey(
-+                    RSAUtil.KeyType.RSA, "PKCS#8", plainExportedKey
-+            );
++                    RSAUtil.KeyType.RSA, "PKCS#8", plainExportedKey);
 +            CK_ATTRIBUTE attr;
 +            if ((attr = sensitiveAttrs.get(CKA_PRIVATE_EXPONENT)) != null) {
 +                attr.pValue = rsaPKey.getPrivateExponent().toByteArray();
@@ -3284,6 +3368,162 @@ index 00000000000..8cfa2734d4e
 +        }
 +    }
 +}
+diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSTokenLoginHandler.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSTokenLoginHandler.java
+new file mode 100644
+index 00000000000..f8d505ca815
+--- /dev/null
++++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/FIPSTokenLoginHandler.java
+@@ -0,0 +1,149 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.  Oracle designates this
++ * particular file as subject to the "Classpath" exception as provided
++ * by Oracle in the LICENSE file that accompanied this code.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++package sun.security.pkcs11;
++
++import java.io.BufferedReader;
++import java.io.ByteArrayInputStream;
++import java.io.InputStream;
++import java.io.InputStreamReader;
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.Paths;
++import java.nio.file.StandardOpenOption;
++import java.security.ProviderException;
++
++import javax.security.auth.callback.Callback;
++import javax.security.auth.callback.CallbackHandler;
++import javax.security.auth.callback.PasswordCallback;
++import javax.security.auth.callback.UnsupportedCallbackException;
++
++import sun.security.util.Debug;
++import sun.security.util.SecurityProperties;
++
++final class FIPSTokenLoginHandler implements CallbackHandler {
++
++    private static final String FIPS_NSSDB_PIN_PROP = "fips.nssdb.pin";
++
++    private static final Debug debug = Debug.getInstance("sunpkcs11");
++
++    public void handle(Callback[] callbacks)
++            throws IOException, UnsupportedCallbackException {
++        if (!(callbacks[0] instanceof PasswordCallback)) {
++            throw new UnsupportedCallbackException(callbacks[0]);
++        }
++        PasswordCallback pc = (PasswordCallback)callbacks[0];
++        pc.setPassword(getFipsNssdbPin());
++    }
++
++    private static char[] getFipsNssdbPin() throws ProviderException {
++        if (debug != null) {
++            debug.println("FIPS: Reading NSS DB PIN for token...");
++        }
++        String pinProp = SecurityProperties
++                .privilegedGetOverridable(FIPS_NSSDB_PIN_PROP);
++        if (pinProp != null && !pinProp.isEmpty()) {
++            String[] pinPropParts = pinProp.split(":", 2);
++            if (pinPropParts.length < 2) {
++                throw new ProviderException("Invalid " + FIPS_NSSDB_PIN_PROP +
++                        " property value.");
++            }
++            String prefix = pinPropParts[0].toLowerCase();
++            String value = pinPropParts[1];
++            String pin = null;
++            if (prefix.equals("env")) {
++                if (debug != null) {
++                    debug.println("FIPS: PIN value from the '" + value +
++                            "' environment variable.");
++                }
++                pin = System.getenv(value);
++            } else if (prefix.equals("file")) {
++                if (debug != null) {
++                    debug.println("FIPS: PIN value from the '" + value +
++                            "' file.");
++                }
++                pin = getPinFromFile(Paths.get(value));
++            } else if (prefix.equals("pin")) {
++                if (debug != null) {
++                    debug.println("FIPS: PIN value from the " +
++                            FIPS_NSSDB_PIN_PROP + " property.");
++                }
++                pin = value;
++            } else {
++                throw new ProviderException("Unsupported prefix for " +
++                        FIPS_NSSDB_PIN_PROP + ".");
++            }
++            if (pin != null && !pin.isEmpty()) {
++                if (debug != null) {
++                    debug.println("FIPS: non-empty PIN.");
++                }
++                /*
++                 * C_Login in libj2pkcs11 receives the PIN in a char[] and
++                 * discards the upper byte of each char, before passing
++                 * the value to the NSS Software Token. However, the
++                 * NSS Software Token accepts any UTF-8 PIN value. Thus,
++                 * expand the PIN here to account for later truncation.
++                 */
++                byte[] pinUtf8 = pin.getBytes(StandardCharsets.UTF_8);
++                char[] pinChar = new char[pinUtf8.length];
++                for (int i = 0; i < pinChar.length; i++) {
++                    pinChar[i] = (char)(pinUtf8[i] & 0xFF);
++                }
++                return pinChar;
++            }
++        }
++        if (debug != null) {
++            debug.println("FIPS: empty PIN.");
++        }
++        return null;
++    }
++
++    /*
++     * This method extracts the token PIN from the first line of a password
++     * file in the same way as NSS modutil. See for example the -newpwfile
++     * argument used to change the password for an NSS DB.
++     */
++    private static String getPinFromFile(Path f) throws ProviderException {
++        try (InputStream is =
++                Files.newInputStream(f, StandardOpenOption.READ)) {
++            /*
++             * SECU_FilePasswd in NSS (nss/cmd/lib/secutil.c), used by modutil,
++             * reads up to 4096 bytes. In addition, the NSS Software Token
++             * does not accept PINs longer than 500 bytes (see SFTK_MAX_PIN
++             * in nss/lib/softoken/pkcs11i.h).
++             */
++            BufferedReader in =
++                    new BufferedReader(new InputStreamReader(
++                            new ByteArrayInputStream(is.readNBytes(4096)),
++                            StandardCharsets.UTF_8));
++            return in.readLine();
++        } catch (IOException ioe) {
++            throw new ProviderException("Error reading " + FIPS_NSSDB_PIN_PROP +
++                    " from the '" + f + "' file.", ioe);
++        }
++    }
++}
+\ No newline at end of file
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java
 index 9b69072280e..5696b904979 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11Key.java
@@ -3597,7 +3837,7 @@ index 00000000000..ae4262703e6
 +
 +}
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
-index c98960f7fcc..c14319a5356 100644
+index 8d1b8ccb0ae..950ed20cf62 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
 @@ -31,6 +31,7 @@ import java.security.*;
@@ -3608,7 +3848,7 @@ index c98960f7fcc..c14319a5356 100644
  import javax.crypto.spec.*;
  
  import static sun.security.pkcs11.TemplateManager.*;
-@@ -193,6 +194,128 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -194,6 +195,128 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
          return p11Key;
      }
  
@@ -3737,7 +3977,7 @@ index c98960f7fcc..c14319a5356 100644
      static void fixDESParity(byte[] key, int offset) {
          for (int i = 0; i < 8; i++) {
              int b = key[offset] & 0xfe;
-@@ -319,6 +442,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -320,6 +443,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
                  keySpec = new SecretKeySpec(keyBytes, "DESede");
                  return engineGenerateSecret(keySpec);
              }
@@ -3747,7 +3987,7 @@ index c98960f7fcc..c14319a5356 100644
          }
          throw new InvalidKeySpecException
                  ("Unsupported spec: " + keySpec.getClass().getName());
-@@ -372,6 +498,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -373,6 +499,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
      // see JCE spec
      protected SecretKey engineTranslateKey(SecretKey key)
              throws InvalidKeyException {
@@ -3880,7 +4120,7 @@ index 262cfc062ad..72b64f72c0a 100644
          Provider p = sun;
          if (p == null) {
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
-index 112b639aa96..3e170b4c115 100644
+index aa35e8fa668..f4d7c9cc201 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/SunPKCS11.java
 @@ -26,6 +26,9 @@
@@ -3893,7 +4133,7 @@ index 112b639aa96..3e170b4c115 100644
  import java.util.*;
  
  import java.security.*;
-@@ -42,6 +45,7 @@ import javax.security.auth.callback.PasswordCallback;
+@@ -42,10 +45,12 @@ import javax.security.auth.callback.PasswordCallback;
  
  import com.sun.crypto.provider.ChaCha20Poly1305Parameters;
  
@@ -3901,7 +4141,12 @@ index 112b639aa96..3e170b4c115 100644
  import jdk.internal.misc.InnocuousThread;
  import sun.security.util.Debug;
  import sun.security.util.ResourcesMgr;
-@@ -62,6 +66,37 @@ import static sun.security.pkcs11.wrapper.PKCS11Exception.*;
+ import static sun.security.util.SecurityConstants.PROVIDER_VER;
++import sun.security.util.SecurityProperties;
+ import static sun.security.util.SecurityProviderConstants.getAliases;
+ 
+ import sun.security.pkcs11.Secmod.*;
+@@ -62,6 +67,39 @@ import static sun.security.pkcs11.wrapper.PKCS11Exception.*;
   */
  public final class SunPKCS11 extends AuthProvider {
  
@@ -3936,10 +4181,31 @@ index 112b639aa96..3e170b4c115 100644
 +        fipsExportKey = fipsExportKeyTmp;
 +    }
 +
++    private static final String FIPS_NSSDB_PATH_PROP = "fips.nssdb.path";
++
      private static final long serialVersionUID = -1354835039035306505L;
  
      static final Debug debug = Debug.getInstance("sunpkcs11");
-@@ -320,10 +355,19 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -115,6 +153,18 @@ public final class SunPKCS11 extends AuthProvider {
+             return AccessController.doPrivileged(new PrivilegedExceptionAction<>() {
+                 @Override
+                 public SunPKCS11 run() throws Exception {
++                    if (systemFipsEnabled) {
++                        /*
++                         * The nssSecmodDirectory attribute in the SunPKCS11
++                         * NSS configuration file takes the value of the
++                         * fips.nssdb.path System property after expansion.
++                         * Security properties expansion is unsupported.
++                         */
++                        System.setProperty(
++                                FIPS_NSSDB_PATH_PROP,
++                                SecurityProperties.privilegedGetOverridable(
++                                        FIPS_NSSDB_PATH_PROP));
++                    }
+                     return new SunPKCS11(new Config(newConfigName));
+                 }
+             });
+@@ -320,10 +370,19 @@ public final class SunPKCS11 extends AuthProvider {
              // request multithreaded access first
              initArgs.flags = CKF_OS_LOCKING_OK;
              PKCS11 tmpPKCS11;
@@ -3960,7 +4226,7 @@ index 112b639aa96..3e170b4c115 100644
              } catch (PKCS11Exception e) {
                  if (debug != null) {
                      debug.println("Multi-threaded initialization failed: " + e);
-@@ -339,11 +383,12 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -339,11 +398,12 @@ public final class SunPKCS11 extends AuthProvider {
                      initArgs.flags = 0;
                  }
                  tmpPKCS11 = PKCS11.getInstance(library,
@@ -3975,32 +4241,7 @@ index 112b639aa96..3e170b4c115 100644
              if (p11Info.cryptokiVersion.major < 2) {
                  throw new ProviderException("Only PKCS#11 v2.0 and later "
                  + "supported, library version is v" + p11Info.cryptokiVersion);
-@@ -379,6 +424,24 @@ public final class SunPKCS11 extends AuthProvider {
-             if (nssModule != null) {
-                 nssModule.setProvider(this);
-             }
-+            if (systemFipsEnabled) {
-+                // The NSS Software Token in FIPS 140-2 mode requires a user
-+                // login for most operations. See sftk_fipsCheck. The NSS DB
-+                // (/etc/pki/nssdb) PIN is empty.
-+                Session session = null;
-+                try {
-+                    session = token.getOpSession();
-+                    p11.C_Login(session.id(), CKU_USER, new char[] {});
-+                } catch (PKCS11Exception p11e) {
-+                    if (debug != null) {
-+                        debug.println("Error during token login: " +
-+                                p11e.getMessage());
-+                    }
-+                    throw p11e;
-+                } finally {
-+                    token.releaseSession(session);
-+                }
-+            }
-         } catch (Exception e) {
-             if (config.getHandleStartupErrors() == Config.ERR_IGNORE_ALL) {
-                 throw new UnsupportedOperationException
-@@ -417,14 +480,19 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -417,14 +477,19 @@ public final class SunPKCS11 extends AuthProvider {
          final String className;
          final List<String> aliases;
          final int[] mechanisms;
@@ -4021,7 +4262,7 @@ index 112b639aa96..3e170b4c115 100644
          }
          private P11Service service(Token token, int mechanism) {
              return new P11Service
-@@ -458,18 +526,29 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -458,18 +523,29 @@ public final class SunPKCS11 extends AuthProvider {
  
      private static void d(String type, String algorithm, String className,
              int[] m) {
@@ -4054,7 +4295,7 @@ index 112b639aa96..3e170b4c115 100644
      }
  
      private static void register(Descriptor d) {
-@@ -525,6 +604,7 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -525,6 +601,7 @@ public final class SunPKCS11 extends AuthProvider {
          String P11Cipher           = "sun.security.pkcs11.P11Cipher";
          String P11RSACipher        = "sun.security.pkcs11.P11RSACipher";
          String P11AEADCipher       = "sun.security.pkcs11.P11AEADCipher";
@@ -4062,7 +4303,7 @@ index 112b639aa96..3e170b4c115 100644
          String P11Signature        = "sun.security.pkcs11.P11Signature";
          String P11PSSSignature     = "sun.security.pkcs11.P11PSSSignature";
  
-@@ -587,6 +667,30 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -587,6 +664,30 @@ public final class SunPKCS11 extends AuthProvider {
          d(MAC, "SslMacSHA1",    P11Mac,
                  m(CKM_SSL3_SHA1_MAC));
  
@@ -4093,7 +4334,7 @@ index 112b639aa96..3e170b4c115 100644
          d(KPG, "RSA",           P11KeyPairGenerator,
                  getAliases("PKCS1"),
                  m(CKM_RSA_PKCS_KEY_PAIR_GEN));
-@@ -685,6 +789,66 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -685,6 +786,66 @@ public final class SunPKCS11 extends AuthProvider {
          d(SKF, "ChaCha20",      P11SecretKeyFactory,
                  m(CKM_CHACHA20_POLY1305));
  
@@ -4160,7 +4401,7 @@ index 112b639aa96..3e170b4c115 100644
          // XXX attributes for Ciphers (supported modes, padding)
          dA(CIP, "ARCFOUR",                      P11Cipher,
                  m(CKM_RC4));
-@@ -754,6 +918,46 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -754,6 +915,46 @@ public final class SunPKCS11 extends AuthProvider {
          d(CIP, "RSA/ECB/NoPadding",             P11RSACipher,
                  m(CKM_RSA_X_509));
  
@@ -4207,7 +4448,7 @@ index 112b639aa96..3e170b4c115 100644
          d(SIG, "RawDSA",        P11Signature,
                  List.of("NONEwithDSA"),
                  m(CKM_DSA));
-@@ -1144,9 +1348,21 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1144,9 +1345,21 @@ public final class SunPKCS11 extends AuthProvider {
              if (ds == null) {
                  continue;
              }
@@ -4229,7 +4470,35 @@ index 112b639aa96..3e170b4c115 100644
                      supportedAlgs.put(d, integerMech);
                      continue;
                  }
-@@ -1244,6 +1460,8 @@ public final class SunPKCS11 extends AuthProvider {
+@@ -1225,6 +1438,27 @@ public final class SunPKCS11 extends AuthProvider {
+             if (token.isValid() == false) {
+                 throw new NoSuchAlgorithmException("Token has been removed");
+             }
++            if (systemFipsEnabled && !token.fipsLoggedIn &&
++                    !getType().equals("KeyStore")) {
++                /*
++                 * The NSS Software Token in FIPS 140-2 mode requires a
++                 * user login for most operations. See sftk_fipsCheck
++                 * (nss/lib/softoken/fipstokn.c). In case of a KeyStore
++                 * service, let the caller perform the login with
++                 * KeyStore::load. Keytool, for example, does this to pass a
++                 * PIN from either the -srcstorepass or -deststorepass
++                 * argument. In case of a non-KeyStore service, perform the
++                 * login now with the PIN available in the fips.nssdb.pin
++                 * property.
++                 */
++                try {
++                    token.ensureLoggedIn(null);
++                } catch (PKCS11Exception | LoginException e) {
++                    throw new ProviderException("FIPS: error during the Token" +
++                            " login required for the " + getType() +
++                            " service.", e);
++                }
++            }
+             try {
+                 return newInstance0(param);
+             } catch (PKCS11Exception e) {
+@@ -1244,6 +1478,8 @@ public final class SunPKCS11 extends AuthProvider {
                  } else if (algorithm.endsWith("GCM/NoPadding") ||
                             algorithm.startsWith("ChaCha20-Poly1305")) {
                      return new P11AEADCipher(token, algorithm, mechanism);
@@ -4238,6 +4507,63 @@ index 112b639aa96..3e170b4c115 100644
                  } else {
                      return new P11Cipher(token, algorithm, mechanism);
                  }
+@@ -1579,6 +1815,9 @@ public final class SunPKCS11 extends AuthProvider {
+         try {
+             session = token.getOpSession();
+             p11.C_Logout(session.id());
++            if (systemFipsEnabled) {
++                token.fipsLoggedIn = false;
++            }
+             if (debug != null) {
+                 debug.println("logout succeeded");
+             }
+diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
+index 9858a5faedf..e63585486d9 100644
+--- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
++++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/Token.java
+@@ -33,6 +33,7 @@ import java.lang.ref.*;
+ import java.security.*;
+ import javax.security.auth.login.LoginException;
+ 
++import jdk.internal.access.SharedSecrets;
+ import sun.security.jca.JCAUtil;
+ 
+ import sun.security.pkcs11.wrapper.*;
+@@ -48,6 +49,9 @@ import static sun.security.pkcs11.wrapper.PKCS11Exception.*;
+  */
+ class Token implements Serializable {
+ 
++    private static final boolean systemFipsEnabled = SharedSecrets
++            .getJavaSecuritySystemConfiguratorAccess().isSystemFipsEnabled();
++
+     // need to be serializable to allow SecureRandom to be serialized
+     private static final long serialVersionUID = 2541527649100571747L;
+ 
+@@ -114,6 +118,10 @@ class Token implements Serializable {
+     // flag indicating whether we are logged in
+     private volatile boolean loggedIn;
+ 
++    // Flag indicating the login status for the NSS Software Token in FIPS mode.
++    // This Token is never asynchronously removed. Used from SunPKCS11.
++    volatile boolean fipsLoggedIn;
++
+     // time we last checked login status
+     private long lastLoginCheck;
+ 
+@@ -232,7 +240,12 @@ class Token implements Serializable {
+     // call provider.login() if not
+     void ensureLoggedIn(Session session) throws PKCS11Exception, LoginException {
+         if (isLoggedIn(session) == false) {
+-            provider.login(null, null);
++            if (systemFipsEnabled) {
++                provider.login(null, new FIPSTokenLoginHandler());
++                fipsLoggedIn = true;
++            } else {
++                provider.login(null, null);
++            }
+         }
+     }
+ 
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/CK_ECDH1_DERIVE_PARAMS.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/CK_ECDH1_DERIVE_PARAMS.java
 index 88ff8a71fc3..47a2f97eddf 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/CK_ECDH1_DERIVE_PARAMS.java
@@ -4877,7 +5203,7 @@ index 5c0aacd1a67..5fbf8addcba 100644
 +}
  }
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11Constants.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11Constants.java
-index d22844cfba8..9e02958b4b0 100644
+index 0d65ee26805..38fd4aff1f3 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11Constants.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11Constants.java
 @@ -1104,17 +1104,6 @@ public interface PKCS11Constants {
@@ -4939,7 +5265,7 @@ index d22844cfba8..9e02958b4b0 100644
 +                                        /* (CKM_NSS + 32) */ = 0xCE534370L;
  }
 diff --git a/src/jdk.crypto.cryptoki/share/native/libj2pkcs11/p11_convert.c b/src/jdk.crypto.cryptoki/share/native/libj2pkcs11/p11_convert.c
-index 666c5eb9b3b..5523dafcdb4 100644
+index d941b574cc7..e2de13648be 100644
 --- a/src/jdk.crypto.cryptoki/share/native/libj2pkcs11/p11_convert.c
 +++ b/src/jdk.crypto.cryptoki/share/native/libj2pkcs11/p11_convert.c
 @@ -1515,6 +1515,10 @@ CK_VOID_PTR jMechParamToCKMechParamPtrSlow(JNIEnv *env, jobject jParam,
