@@ -136,10 +136,10 @@ index a65d91ee974..a8f054c1397 100644
    BASIC_JDKLIB_LIBS=""
    if test "x$TOOLCHAIN_TYPE" != xmicrosoft; then
 diff --git a/make/autoconf/spec.gmk.in b/make/autoconf/spec.gmk.in
-index d557549adb3..1cb44bd2595 100644
+index 537c3e3043c..16ad3df6f09 100644
 --- a/make/autoconf/spec.gmk.in
 +++ b/make/autoconf/spec.gmk.in
-@@ -840,6 +840,11 @@ INSTALL_SYSCONFDIR=@sysconfdir@
+@@ -841,6 +841,11 @@ INSTALL_SYSCONFDIR=@sysconfdir@
  # Libraries
  #
  
@@ -1362,27 +1362,18 @@ index a020e1c15d8..3c064965e82 100644
  
      // Return the instance of this class or create one if needed.
 diff --git a/src/java.base/share/classes/java/security/Security.java b/src/java.base/share/classes/java/security/Security.java
-index ff2bc942c03..96a3ba4040c 100644
+index 2477027969c..06b1b6c671c 100644
 --- a/src/java.base/share/classes/java/security/Security.java
 +++ b/src/java.base/share/classes/java/security/Security.java
-@@ -32,6 +32,7 @@ import java.net.URL;
- 
+@@ -33,6 +33,7 @@ import java.net.URL;
+ import jdk.internal.access.JavaSecurityPropertiesAccess;
  import jdk.internal.event.EventHelper;
  import jdk.internal.event.SecurityPropertyModificationEvent;
 +import jdk.internal.access.JavaSecuritySystemConfiguratorAccess;
  import jdk.internal.access.SharedSecrets;
  import jdk.internal.util.StaticProperty;
  import sun.security.util.Debug;
-@@ -47,12 +48,20 @@ import sun.security.jca.*;
-  * implementation-specific location, which is typically the properties file
-  * {@code conf/security/java.security} in the Java installation directory.
-  *
-+ * <p>Additional default values of security properties are read from a
-+ * system-specific location, if available.</p>
-+ *
-  * @author Benjamin Renaud
-  * @since 1.1
-  */
+@@ -57,6 +58,11 @@ import sun.security.jca.*;
  
  public final class Security {
  
@@ -1394,7 +1385,7 @@ index ff2bc942c03..96a3ba4040c 100644
      /* Are we debugging? -- for developers */
      private static final Debug sdebug =
                          Debug.getInstance("properties");
-@@ -67,6 +76,19 @@ public final class Security {
+@@ -74,6 +80,19 @@ public final class Security {
      }
  
      static {
@@ -1414,26 +1405,19 @@ index ff2bc942c03..96a3ba4040c 100644
          // doPrivileged here because there are multiple
          // things in initialize that might require privs.
          // (the FileInputStream call and the File.exists call,
-@@ -84,6 +106,7 @@ public final class Security {
+@@ -97,6 +116,7 @@ public final class Security {
+     private static void initialize() {
          props = new Properties();
-         boolean loadedProps = false;
          boolean overrideAll = false;
 +        boolean systemSecPropsEnabled = false;
  
          // first load the system properties file
          // to determine the value of security.overridePropertiesFile
-@@ -99,6 +122,7 @@ public final class Security {
-                 if (sdebug != null) {
-                     sdebug.println("reading security properties file: " +
-                                 propFile);
-+                    sdebug.println(props.toString());
-                 }
-             } catch (IOException e) {
-                 if (sdebug != null) {
-@@ -193,6 +217,61 @@ public final class Security {
+@@ -117,6 +137,60 @@ public final class Security {
              }
+             loadProps(null, extraPropFile, overrideAll);
          }
- 
++
 +        boolean sysUseProps = Boolean.valueOf(System.getProperty(SYS_PROP_SWITCH, "false"));
 +        boolean secUseProps = Boolean.valueOf(props.getProperty(SEC_PROP_SWITCH));
 +        if (sdebug != null) {
@@ -1453,9 +1437,7 @@ index ff2bc942c03..96a3ba4040c 100644
 +            }
 +        }
 +
-+        // FIPS support depends on the contents of java.security so
-+        // ensure it has loaded first
-+        if (loadedProps && systemSecPropsEnabled) {
++        if (systemSecPropsEnabled) {
 +            boolean shouldEnable;
 +            String sysProp = System.getProperty("com.redhat.fips");
 +            if (sysProp == null) {
@@ -1489,15 +1471,27 @@ index ff2bc942c03..96a3ba4040c 100644
 +                               "system security properties being enabled.");
 +            }
 +        }
+         initialSecurityProperties = (Properties) props.clone();
+         if (sdebug != null) {
+             for (String key : props.stringPropertyNames()) {
+@@ -124,10 +198,9 @@ public final class Security {
+                     props.getProperty(key));
+             }
+         }
+-
      }
  
-     /*
+-    private static boolean loadProps(File masterFile, String extraPropFile, boolean overrideAll) {
++    static boolean loadProps(File masterFile, String extraPropFile, boolean overrideAll) {
+         InputStream is = null;
+         try {
+             if (masterFile != null && masterFile.exists()) {
 diff --git a/src/java.base/share/classes/java/security/SystemConfigurator.java b/src/java.base/share/classes/java/security/SystemConfigurator.java
 new file mode 100644
-index 00000000000..98ffced455b
+index 00000000000..9d26a54f5d4
 --- /dev/null
 +++ b/src/java.base/share/classes/java/security/SystemConfigurator.java
-@@ -0,0 +1,249 @@
+@@ -0,0 +1,232 @@
 +/*
 + * Copyright (c) 2019, 2021, Red Hat, Inc.
 + *
@@ -1578,26 +1572,9 @@ index 00000000000..98ffced455b
 +     * security.useSystemPropertiesFile is true.
 +     */
 +    static boolean configureSysProps(Properties props) {
-+        boolean systemSecPropsLoaded = false;
-+
-+        try (BufferedInputStream bis =
-+                new BufferedInputStream(
-+                        new FileInputStream(CRYPTO_POLICIES_JAVA_CONFIG))) {
-+            props.load(bis);
-+            systemSecPropsLoaded = true;
-+            if (sdebug != null) {
-+                sdebug.println("reading system security properties file " +
-+                        CRYPTO_POLICIES_JAVA_CONFIG);
-+                sdebug.println(props.toString());
-+            }
-+        } catch (IOException e) {
-+            if (sdebug != null) {
-+                sdebug.println("unable to load security properties from " +
-+                        CRYPTO_POLICIES_JAVA_CONFIG);
-+                e.printStackTrace();
-+            }
-+        }
-+        return systemSecPropsLoaded;
++        // now load the system file, if it exists, so its values
++        // will win if they conflict with the earlier values
++        return Security.loadProps(null, CRYPTO_POLICIES_JAVA_CONFIG, false);
 +    }
 +
 +    /*
@@ -1652,7 +1629,7 @@ index 00000000000..98ffced455b
 +                        sdebug.println("FIPS mode default keystore.type = " +
 +                                keystoreTypeValue);
 +                        sdebug.println("FIPS mode javax.net.ssl.keyStore = " +
-+                                System.getProperty("javax.net.ssl.keyStore", ""));
++                                        System.getProperty("javax.net.ssl.keyStore", ""));
 +                        sdebug.println("FIPS mode javax.net.ssl.trustStoreType = " +
 +                                System.getProperty("javax.net.ssl.trustStoreType", ""));
 +                    }
@@ -1785,10 +1762,10 @@ index 00000000000..3f3caac64dc
 +    boolean isPlainKeySupportEnabled();
 +}
 diff --git a/src/java.base/share/classes/jdk/internal/access/SharedSecrets.java b/src/java.base/share/classes/jdk/internal/access/SharedSecrets.java
-index f6d3638c3dd..a1ee182d913 100644
+index ea28bb8747e..77161eb3844 100644
 --- a/src/java.base/share/classes/jdk/internal/access/SharedSecrets.java
 +++ b/src/java.base/share/classes/jdk/internal/access/SharedSecrets.java
-@@ -39,6 +39,7 @@ import java.io.FilePermission;
+@@ -40,6 +40,7 @@ import java.io.FilePermission;
  import java.io.ObjectInputStream;
  import java.io.RandomAccessFile;
  import java.security.ProtectionDomain;
@@ -1796,7 +1773,7 @@ index f6d3638c3dd..a1ee182d913 100644
  import java.security.Signature;
  
  /** A repository of "shared secrets", which are a mechanism for
-@@ -81,6 +82,7 @@ public class SharedSecrets {
+@@ -83,6 +84,7 @@ public class SharedSecrets {
      private static JavaSecuritySpecAccess javaSecuritySpecAccess;
      private static JavaxCryptoSealedObjectAccess javaxCryptoSealedObjectAccess;
      private static JavaxCryptoSpecAccess javaxCryptoSpecAccess;
@@ -1804,7 +1781,7 @@ index f6d3638c3dd..a1ee182d913 100644
  
      public static void setJavaUtilCollectionAccess(JavaUtilCollectionAccess juca) {
          javaUtilCollectionAccess = juca;
-@@ -442,4 +444,15 @@ public class SharedSecrets {
+@@ -457,4 +459,15 @@ public class SharedSecrets {
              MethodHandles.lookup().ensureInitialized(c);
          } catch (IllegalAccessException e) {}
      }
@@ -1821,7 +1798,7 @@ index f6d3638c3dd..a1ee182d913 100644
 +    }
  }
 diff --git a/src/java.base/share/classes/module-info.java b/src/java.base/share/classes/module-info.java
-index 9faee9cae36..27f43550aa4 100644
+index fad70bdc058..29a813a485f 100644
 --- a/src/java.base/share/classes/module-info.java
 +++ b/src/java.base/share/classes/module-info.java
 @@ -152,6 +152,8 @@ module java.base {
@@ -1832,9 +1809,9 @@ index 9faee9cae36..27f43550aa4 100644
 +        jdk.crypto.ec,
          jdk.jartool,
          jdk.jlink,
-         jdk.net,
+         jdk.jfr,
 diff --git a/src/java.base/share/classes/sun/security/provider/SunEntries.java b/src/java.base/share/classes/sun/security/provider/SunEntries.java
-index 912cad59714..709d32912ca 100644
+index 912cad59714..7803e97f7ef 100644
 --- a/src/java.base/share/classes/sun/security/provider/SunEntries.java
 +++ b/src/java.base/share/classes/sun/security/provider/SunEntries.java
 @@ -30,6 +30,7 @@ import java.net.*;
@@ -1856,7 +1833,7 @@ index 912cad59714..709d32912ca 100644
      // the default algo used by SecureRandom class for new SecureRandom() calls
      public static final String DEF_SECURE_RANDOM_ALGO;
  
-@@ -94,99 +99,101 @@ public final class SunEntries {
+@@ -94,89 +99,92 @@ public final class SunEntries {
          // common attribute map
          HashMap<String, String> attrs = new HashMap<>(3);
  
@@ -1920,8 +1897,6 @@ index 912cad59714..709d32912ca 100644
 -                "sun.security.provider.DSA$SHA3_384withDSA", attrs);
 -        addWithAlias(p, "Signature", "SHA3-512withDSA",
 -                "sun.security.provider.DSA$SHA3_512withDSA", attrs);
--
--        attrs.remove("KeySize");
 +        if (!systemFipsEnabled) {
 +            /*
 +             * SecureRandom engines
@@ -1944,32 +1919,7 @@ index 912cad59714..709d32912ca 100644
 +            add(p, "SecureRandom", "SHA1PRNG",
 +                    "sun.security.provider.SecureRandom", attrs);
  
--        add(p, "Signature", "SHA1withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA1withDSAinP1363Format");
--        add(p, "Signature", "NONEwithDSAinP1363Format",
--                "sun.security.provider.DSA$RawDSAinP1363Format");
--        add(p, "Signature", "SHA224withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA224withDSAinP1363Format");
--        add(p, "Signature", "SHA256withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA256withDSAinP1363Format");
--        add(p, "Signature", "SHA384withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA384withDSAinP1363Format");
--        add(p, "Signature", "SHA512withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA512withDSAinP1363Format");
--        add(p, "Signature", "SHA3-224withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA3_224withDSAinP1363Format");
--        add(p, "Signature", "SHA3-256withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA3_256withDSAinP1363Format");
--        add(p, "Signature", "SHA3-384withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA3_384withDSAinP1363Format");
--        add(p, "Signature", "SHA3-512withDSAinP1363Format",
--                "sun.security.provider.DSA$SHA3_512withDSAinP1363Format");
--        /*
--         *  Key Pair Generator engines
--         */
--        attrs.clear();
--        attrs.put("ImplementedIn", "Software");
--        attrs.put("KeySize", "2048"); // for DSA KPG and APG only
+-        attrs.remove("KeySize");
 +            /*
 +             * Signature engines
 +             */
@@ -2032,16 +1982,39 @@ index 912cad59714..709d32912ca 100644
 +                    "sun.security.provider.DSA$SHA3_384withDSAinP1363Format");
 +            add(p, "Signature", "SHA3-512withDSAinP1363Format",
 +                    "sun.security.provider.DSA$SHA3_512withDSAinP1363Format");
-+            /*
-+             *  Key Pair Generator engines
-+             */
-+            attrs.clear();
-+            attrs.put("ImplementedIn", "Software");
-+            attrs.put("KeySize", "2048"); // for DSA KPG and APG only
++        }
+ 
+-        add(p, "Signature", "SHA1withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA1withDSAinP1363Format");
+-        add(p, "Signature", "NONEwithDSAinP1363Format",
+-                "sun.security.provider.DSA$RawDSAinP1363Format");
+-        add(p, "Signature", "SHA224withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA224withDSAinP1363Format");
+-        add(p, "Signature", "SHA256withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA256withDSAinP1363Format");
+-        add(p, "Signature", "SHA384withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA384withDSAinP1363Format");
+-        add(p, "Signature", "SHA512withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA512withDSAinP1363Format");
+-        add(p, "Signature", "SHA3-224withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA3_224withDSAinP1363Format");
+-        add(p, "Signature", "SHA3-256withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA3_256withDSAinP1363Format");
+-        add(p, "Signature", "SHA3-384withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA3_384withDSAinP1363Format");
+-        add(p, "Signature", "SHA3-512withDSAinP1363Format",
+-                "sun.security.provider.DSA$SHA3_512withDSAinP1363Format");
+         /*
+          *  Key Pair Generator engines
+          */
+@@ -184,9 +192,11 @@ public final class SunEntries {
+         attrs.put("ImplementedIn", "Software");
+         attrs.put("KeySize", "2048"); // for DSA KPG and APG only
  
 -        String dsaKPGImplClass = "sun.security.provider.DSAKeyPairGenerator$";
 -        dsaKPGImplClass += (useLegacyDSA? "Legacy" : "Current");
 -        addWithAlias(p, "KeyPairGenerator", "DSA", dsaKPGImplClass, attrs);
++        if (!systemFipsEnabled) {
 +            String dsaKPGImplClass = "sun.security.provider.DSAKeyPairGenerator$";
 +            dsaKPGImplClass += (useLegacyDSA? "Legacy" : "Current");
 +            addWithAlias(p, "KeyPairGenerator", "DSA", dsaKPGImplClass, attrs);
@@ -2049,7 +2022,7 @@ index 912cad59714..709d32912ca 100644
  
          /*
           * Algorithm Parameter Generator engines
-@@ -201,40 +208,42 @@ public final class SunEntries {
+@@ -201,40 +211,42 @@ public final class SunEntries {
          addWithAlias(p, "AlgorithmParameters", "DSA",
                  "sun.security.provider.DSAParameters", attrs);
  
@@ -2126,7 +2099,7 @@ index 912cad59714..709d32912ca 100644
          /*
           * Certificates
 diff --git a/src/java.base/share/classes/sun/security/rsa/SunRsaSignEntries.java b/src/java.base/share/classes/sun/security/rsa/SunRsaSignEntries.java
-index ca79f25cc44..225517ac69b 100644
+index ca79f25cc44..a12fcbbd6e7 100644
 --- a/src/java.base/share/classes/sun/security/rsa/SunRsaSignEntries.java
 +++ b/src/java.base/share/classes/sun/security/rsa/SunRsaSignEntries.java
 @@ -27,6 +27,7 @@ package sun.security.rsa;
@@ -2148,19 +2121,7 @@ index ca79f25cc44..225517ac69b 100644
      private void add(Provider p, String type, String algo, String cn,
               List<String> aliases, HashMap<String, String> attrs) {
           services.add(new Provider.Service(p, type, algo, cn,
-@@ -56,49 +61,58 @@ public final class SunRsaSignEntries {
-         // start populating content using the specified provider
-         // common attribute map
-         HashMap<String, String> attrs = new HashMap<>(3);
--        attrs.put("SupportedKeyClasses",
--                "java.security.interfaces.RSAPublicKey" +
--                "|java.security.interfaces.RSAPrivateKey");
-+        if (!systemFipsEnabled) {
-+            attrs.put("SupportedKeyClasses",
-+                    "java.security.interfaces.RSAPublicKey" +
-+                    "|java.security.interfaces.RSAPrivateKey");
-+        }
- 
+@@ -63,42 +68,49 @@ public final class SunRsaSignEntries {
          add(p, "KeyFactory", "RSA",
                  "sun.security.rsa.RSAKeyFactory$Legacy",
                  getAliases("PKCS1"), null);
@@ -2547,10 +2508,10 @@ index 00000000000..dc8bc72fccb
 +    }
 +}
 diff --git a/src/java.base/share/conf/security/java.security b/src/java.base/share/conf/security/java.security
-index 63be286686d..b0a589c3fb4 100644
+index fab52688c04..29337576f37 100644
 --- a/src/java.base/share/conf/security/java.security
 +++ b/src/java.base/share/conf/security/java.security
-@@ -79,6 +79,16 @@ security.provider.tbd=Apple
+@@ -82,6 +82,17 @@ security.provider.tbd=Apple
  #endif
  security.provider.tbd=SunPKCS11
  
@@ -2563,11 +2524,12 @@ index 63be286686d..b0a589c3fb4 100644
 +fips.provider.4=SunJSSE
 +fips.provider.5=SunJCE
 +fips.provider.6=SunRsaSign
++fips.provider.7=XMLDSig
 +
  #
  # A list of preferred providers for specific algorithms. These providers will
  # be searched for matching algorithms before the list of registered providers.
-@@ -289,6 +299,47 @@ policy.ignoreIdentityScope=false
+@@ -292,6 +303,47 @@ policy.ignoreIdentityScope=false
  #
  keystore.type=pkcs12
  
@@ -2615,7 +2577,7 @@ index 63be286686d..b0a589c3fb4 100644
  #
  # Controls compatibility mode for JKS and PKCS12 keystore types.
  #
-@@ -326,6 +377,13 @@ package.definition=sun.misc.,\
+@@ -329,6 +381,13 @@ package.definition=sun.misc.,\
  #
  security.overridePropertiesFile=true
  
@@ -3846,7 +3808,7 @@ index 00000000000..ae4262703e6
 +
 +}
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
-index 8d1b8ccb0ae..950ed20cf62 100644
+index 8d1b8ccb0ae..7ea9b4c5e7f 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/P11SecretKeyFactory.java
 @@ -31,6 +31,7 @@ import java.security.*;
@@ -3857,7 +3819,7 @@ index 8d1b8ccb0ae..950ed20cf62 100644
  import javax.crypto.spec.*;
  
  import static sun.security.pkcs11.TemplateManager.*;
-@@ -194,6 +195,128 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -194,6 +195,130 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
          return p11Key;
      }
  
@@ -3886,9 +3848,11 @@ index 8d1b8ccb0ae..950ed20cf62 100644
 +            }
 +
 +            if (kdfData.kdfMech == CKM_PKCS5_PBKD2) {
-+                CK_VERSION p11Ver = token.p11.getInfo().cryptokiVersion;
-+                if (P11Util.isNSS(token) || p11Ver.major < 2 ||
-+                        p11Ver.major == 2 && p11Ver.minor < 40) {
++                CK_INFO p11Info = token.p11.getInfo();
++                CK_VERSION p11Ver = (p11Info != null ? p11Info.cryptokiVersion
++                        : null);
++                if (P11Util.isNSS(token) || p11Ver != null && (p11Ver.major <
++                        2 || p11Ver.major == 2 && p11Ver.minor < 40)) {
 +                    // NSS keeps using the old structure beyond PKCS #11 v2.40
 +                    ckMech = new CK_MECHANISM(kdfData.kdfMech,
 +                            new CK_PKCS5_PBKD2_PARAMS(password, salt,
@@ -3986,7 +3950,7 @@ index 8d1b8ccb0ae..950ed20cf62 100644
      static void fixDESParity(byte[] key, int offset) {
          for (int i = 0; i < 8; i++) {
              int b = key[offset] & 0xfe;
-@@ -320,6 +443,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -320,6 +445,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
                  keySpec = new SecretKeySpec(keyBytes, "DESede");
                  return engineGenerateSecret(keySpec);
              }
@@ -3996,7 +3960,7 @@ index 8d1b8ccb0ae..950ed20cf62 100644
          }
          throw new InvalidKeySpecException
                  ("Unsupported spec: " + keySpec.getClass().getName());
-@@ -373,6 +499,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
+@@ -373,6 +501,9 @@ final class P11SecretKeyFactory extends SecretKeyFactorySpi {
      // see JCE spec
      protected SecretKey engineTranslateKey(SecretKey key)
              throws InvalidKeyException {
@@ -4952,7 +4916,7 @@ index 1f9c4d39f57..5e3c1b9d29f 100644
      public String toString() {
          StringBuilder sb = new StringBuilder();
 diff --git a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11.java b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11.java
-index 5c0aacd1a67..5fbf8addcba 100644
+index 5c0aacd1a67..d796aaa3075 100644
 --- a/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11.java
 +++ b/src/jdk.crypto.cryptoki/share/classes/sun/security/pkcs11/wrapper/PKCS11.java
 @@ -49,6 +49,9 @@ package sun.security.pkcs11.wrapper;
@@ -4969,12 +4933,12 @@ index 5c0aacd1a67..5fbf8addcba 100644
  
      private long pNativeData;
  
-+    private CK_INFO pInfo;
++    private volatile CK_INFO pInfo;
 +
      /**
       * This method does the initialization of the native library. It is called
       * exactly once for this class.
-@@ -145,23 +150,49 @@ public class PKCS11 {
+@@ -145,23 +150,48 @@ public class PKCS11 {
       * @postconditions
       */
      PKCS11(String pkcs11ModulePath, String functionListName)
@@ -4982,9 +4946,8 @@ index 5c0aacd1a67..5fbf8addcba 100644
 +            throws IOException, PKCS11Exception {
          connect(pkcs11ModulePath, functionListName);
          this.pkcs11ModulePath = pkcs11ModulePath;
-+        pInfo = C_GetInfo();
-+    }
-+
+     }
+ 
 +    /*
 +     * Compatibility wrapper to allow this method to work as before
 +     * when FIPS mode support is not active.
@@ -4994,8 +4957,8 @@ index 5c0aacd1a67..5fbf8addcba 100644
 +           boolean omitInitialize) throws IOException, PKCS11Exception {
 +        return getInstance(pkcs11ModulePath, functionList,
 +                           pInitArgs, omitInitialize, null, null);
-     }
- 
++    }
++
      public static synchronized PKCS11 getInstance(String pkcs11ModulePath,
              String functionList, CK_C_INITIALIZE_ARGS pInitArgs,
 -            boolean omitInitialize) throws IOException, PKCS11Exception {
@@ -5028,7 +4991,7 @@ index 5c0aacd1a67..5fbf8addcba 100644
              }
              if (omitInitialize == false) {
                  try {
-@@ -179,6 +210,14 @@ public class PKCS11 {
+@@ -179,6 +209,28 @@ public class PKCS11 {
          return pkcs11;
      }
  
@@ -5037,13 +5000,27 @@ index 5c0aacd1a67..5fbf8addcba 100644
 +     * C_GetInfo. This structure represent Cryptoki library information.
 +     */
 +    public CK_INFO getInfo() {
-+        return pInfo;
++        CK_INFO lPInfo = pInfo;
++        if (lPInfo == null) {
++            synchronized (this) {
++                lPInfo = pInfo;
++                if (lPInfo == null) {
++                    try {
++                        lPInfo = C_GetInfo();
++                        pInfo = lPInfo;
++                    } catch (PKCS11Exception e) {
++                        // Some PKCS #11 tokens require initialization first.
++                    }
++                }
++            }
++        }
++        return lPInfo;
 +    }
 +
      /**
       * Connects this object to the specified PKCS#11 library. This method is for
       * internal use only.
-@@ -1625,7 +1664,7 @@ public class PKCS11 {
+@@ -1625,7 +1677,7 @@ public class PKCS11 {
  static class SynchronizedPKCS11 extends PKCS11 {
  
      SynchronizedPKCS11(String pkcs11ModulePath, String functionListName)
@@ -5052,7 +5029,7 @@ index 5c0aacd1a67..5fbf8addcba 100644
          super(pkcs11ModulePath, functionListName);
      }
  
-@@ -1911,4 +1950,194 @@ static class SynchronizedPKCS11 extends PKCS11 {
+@@ -1911,4 +1963,194 @@ static class SynchronizedPKCS11 extends PKCS11 {
          super.C_GenerateRandom(hSession, randomData);
      }
  }
@@ -5954,3 +5931,1318 @@ index 8c9e4f9dbe6..883dc04758e 100644
  
      }
  }
+diff --git a/test/jdk/sun/security/pkcs11/Cipher/PBECipher.java b/test/jdk/sun/security/pkcs11/Cipher/PBECipher.java
+new file mode 100644
+index 00000000000..a184a169732
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/Cipher/PBECipher.java
+@@ -0,0 +1,233 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.math.BigInteger;
++import java.security.AlgorithmParameters;
++import java.security.NoSuchAlgorithmException;
++import java.security.Provider;
++import java.security.SecureRandom;
++import java.security.Security;
++import java.util.Map;
++
++import javax.crypto.Cipher;
++import javax.crypto.SecretKey;
++import javax.crypto.SecretKeyFactory;
++import javax.crypto.interfaces.PBEKey;
++import javax.crypto.spec.IvParameterSpec;
++import javax.crypto.spec.PBEKeySpec;
++import javax.crypto.spec.PBEParameterSpec;
++
++/*
++ * @test
++ * @bug 9999999
++ * @summary test password based encryption on SunPKCS11's Cipher service
++ * @requires (jdk.version.major >= 8)
++ * @library /test/lib ..
++ * @run main/othervm/timeout=30 PBECipher
++ */
++
++public final class PBECipher {
++    public static void main(String[] args) throws Exception {
++        java.security.Security.getProviders();
++        PBECipher2.main(args);
++    }
++}
++
++final class PBECipher2 extends PKCS11Test {
++    private static final char[] password = "123456".toCharArray();
++    private static final byte[] salt = "abcdefgh".getBytes();
++    private static final byte[] iv = new byte[16];
++    private static final int iterations = 1000;
++    private static final String plainText = "This is a know plain text!";
++    private static final String sep =
++    "=========================================================================";
++
++    private static enum Configuration {
++        // Provide salt and iterations through a PBEParameterSpec instance
++        PBEParameterSpec,
++
++        // Provide salt and iterations through a AlgorithmParameters instance
++        AlgorithmParameters,
++
++        // Provide salt and iterations through an anonymous class implementing
++        // the javax.crypto.interfaces.PBEKey interface
++        AnonymousPBEKey,
++    }
++
++    private static Provider sunJCE = Security.getProvider("SunJCE");
++
++    // Generated with SunJCE
++    private static final Map<String, BigInteger> assertionData = Map.of(
++            "PBEWithHmacSHA1AndAES_128", new BigInteger("8eebe98a580fb09d026" +
++                    "dbfe60b3733b079e0de9ea7b0b1ccba011a1652d1e257", 16),
++            "PBEWithHmacSHA224AndAES_128", new BigInteger("1cbabdeb5d483af4a" +
++                    "841942f4b1095b7d6f60e46fabfd2609c015adc38cc227", 16),
++            "PBEWithHmacSHA256AndAES_128", new BigInteger("4d82f6591df3508d2" +
++                    "4531f06cdc4f90f4bdab7aeb07fbb57a3712e999d5b6f59", 16),
++            "PBEWithHmacSHA384AndAES_128", new BigInteger("3a0ed0959d51f40b9" +
++                    "ba9f506a5277f430521f2fbe1ba94bae368835f221b6cb9", 16),
++            "PBEWithHmacSHA512AndAES_128", new BigInteger("1388287a446009309" +
++                    "1418f4eca3ba1735b1fa025423d74ced36ce578d8ebf9da", 16),
++            "PBEWithHmacSHA1AndAES_256", new BigInteger("80f8208daab27ed02dd" +
++                    "8a354ef6f23ff7813c84dd1c8a1b081d6f4dee27182a2", 16),
++            "PBEWithHmacSHA224AndAES_256", new BigInteger("7e3b9ce20aec2e52f" +
++                    "f6c781602d4f79a55a88495b5217f1e22e1a068268e6247", 16),
++            "PBEWithHmacSHA256AndAES_256", new BigInteger("9d6a8b6a351dfd0dd" +
++                    "9e9f45924b2860dca7719c4c07e207a64ebc1acd16cc157", 16),
++            "PBEWithHmacSHA384AndAES_256", new BigInteger("6f1b386cee3a8e2d9" +
++                    "8c2e81828da0467dec8b989d22258efeab5932580d01d53", 16),
++            "PBEWithHmacSHA512AndAES_256", new BigInteger("30aaa346b2edd394f" +
++                    "50916187876ac32f1287b19d55c5eea6f7ef9b84aaf291e", 16)
++            );
++
++    private static final class NoRandom extends SecureRandom {
++        @Override
++        public void nextBytes(byte[] bytes) {
++            return;
++        }
++    }
++
++    public void main(Provider sunPKCS11) throws Exception {
++        System.out.println("SunPKCS11: " + sunPKCS11.getName());
++        for (Configuration conf : Configuration.values()) {
++            testWith(sunPKCS11, "PBEWithHmacSHA1AndAES_128", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA224AndAES_128", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA256AndAES_128", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA384AndAES_128", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA512AndAES_128", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA1AndAES_256", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA224AndAES_256", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA256AndAES_256", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA384AndAES_256", conf);
++            testWith(sunPKCS11, "PBEWithHmacSHA512AndAES_256", conf);
++        }
++        System.out.println("TEST PASS - OK");
++    }
++
++    private void testWith(Provider sunPKCS11, String algorithm,
++            Configuration conf) throws Exception {
++        System.out.println(sep + System.lineSeparator() + algorithm
++                + " (with " + conf.name() + ")");
++
++        Cipher pbeCipher = getCipher(sunPKCS11, algorithm, conf);
++        BigInteger cipherText = new BigInteger(1, pbeCipher.doFinal(
++                plainText.getBytes()));
++        printByteArray("Cipher Text", cipherText);
++
++        BigInteger expectedCipherText = null;
++        if (sunJCE != null) {
++            Cipher c = getCipher(sunJCE, algorithm, conf);
++            if (c != null) {
++                expectedCipherText = new BigInteger(1, c.doFinal(
++                        plainText.getBytes()));
++            } else {
++                // Move to assertionData as it's unlikely that any of
++                // the algorithms are available.
++                sunJCE = null;
++            }
++        }
++        if (expectedCipherText == null) {
++            // If SunJCE or the algorithm are not available, assertionData
++            // is used instead.
++            expectedCipherText = assertionData.get(algorithm);
++        }
++
++        if (!cipherText.equals(expectedCipherText)) {
++            printByteArray("Expected Cipher Text", expectedCipherText);
++            throw new Exception("Expected Cipher Text did not match");
++        }
++    }
++
++    private Cipher getCipher(Provider p, String algorithm,
++            Configuration conf) throws Exception {
++        Cipher pbeCipher = null;
++        try {
++            pbeCipher = Cipher.getInstance(algorithm, p);
++        } catch (NoSuchAlgorithmException e) {
++            return null;
++        }
++        switch (conf) {
++            case PBEParameterSpec, AlgorithmParameters -> {
++                SecretKey key = getPasswordOnlyPBEKey();
++                PBEParameterSpec paramSpec = new PBEParameterSpec(
++                        salt, iterations, new IvParameterSpec(iv));
++                switch (conf) {
++                    case PBEParameterSpec -> {
++                        pbeCipher.init(Cipher.ENCRYPT_MODE, key, paramSpec);
++                    }
++                    case AlgorithmParameters -> {
++                        AlgorithmParameters algoParams =
++                                AlgorithmParameters.getInstance("PBES2");
++                        algoParams.init(paramSpec);
++                        pbeCipher.init(Cipher.ENCRYPT_MODE, key, algoParams);
++                    }
++                }
++            }
++            case AnonymousPBEKey -> {
++                SecretKey key = getPasswordSaltIterationsPBEKey();
++                pbeCipher.init(Cipher.ENCRYPT_MODE, key, new NoRandom());
++            }
++        }
++        return pbeCipher;
++    }
++
++    private static SecretKey getPasswordOnlyPBEKey() throws Exception {
++        PBEKeySpec keySpec = new PBEKeySpec(password);
++        SecretKeyFactory skFac = SecretKeyFactory.getInstance("PBE");
++        SecretKey skey = skFac.generateSecret(keySpec);
++        keySpec.clearPassword();
++        return skey;
++    }
++
++    private static SecretKey getPasswordSaltIterationsPBEKey() {
++        return new PBEKey() {
++            public byte[] getSalt() { return salt.clone(); }
++            public int getIterationCount() { return iterations; }
++            public String getAlgorithm() { return "PBE"; }
++            public String getFormat() { return "RAW"; }
++            public char[] getPassword() { return null; } // unused in PBE Cipher
++            public byte[] getEncoded() {
++                byte[] passwdBytes = new byte[password.length];
++                for (int i = 0; i < password.length; i++)
++                    passwdBytes[i] = (byte) (password[i] & 0x7f);
++                return passwdBytes;
++            }
++        };
++    }
++
++    private static void printByteArray(String title, BigInteger b) {
++        String repr = (b == null) ? "buffer is null" : b.toString(16);
++        System.out.println(title + ": " + repr + System.lineSeparator());
++    }
++
++    public static void main(String[] args) throws Exception {
++        PBECipher2 test = new PBECipher2();
++        Provider p = Security.getProvider("SunPKCS11-NSS-FIPS");
++        if (p != null) {
++            test.main(p);
++        } else {
++            main(test);
++        }
++    }
++}
+diff --git a/test/jdk/sun/security/pkcs11/KeyStore/ImportKeyToP12.java b/test/jdk/sun/security/pkcs11/KeyStore/ImportKeyToP12.java
+new file mode 100644
+index 00000000000..360e11c339d
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/KeyStore/ImportKeyToP12.java
+@@ -0,0 +1,137 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.security.Key;
++import java.security.KeyStore;
++import java.security.KeyStoreException;
++import java.security.MessageDigest;
++import java.security.Provider;
++import java.security.Security;
++
++import javax.crypto.spec.SecretKeySpec;
++
++/*
++ * @test
++ * @bug 9999999
++ * @summary test SunPKCS11's password based privacy and integrity
++ *          applied to PKCS#12 keystores
++ * @requires (jdk.version.major >= 8)
++ * @library /test/lib ..
++ * @modules java.base/sun.security.util
++ * @run main/othervm/timeout=30 -Dcom.redhat.fips=false -DNO_DEFAULT=true ImportKeyToP12
++ */
++
++public final class ImportKeyToP12 {
++    public static void main(String[] args) throws Exception {
++        java.security.Security.getProviders();
++        ImportKeyToP122.main(args);
++    }
++}
++
++final class ImportKeyToP122 extends PKCS11Test {
++    private static final String alias = "alias";
++    private static final char[] password = "123456".toCharArray();
++    private static final Key key = new SecretKeySpec(new byte[] {
++            0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7,
++            0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf }, "AES");
++    private static final String[] pbeCipherAlgs = new String[] {
++            "PBEWithHmacSHA1AndAES_128", "PBEWithHmacSHA224AndAES_128",
++            "PBEWithHmacSHA256AndAES_128", "PBEWithHmacSHA384AndAES_128",
++            "PBEWithHmacSHA512AndAES_128", "PBEWithHmacSHA1AndAES_256",
++            "PBEWithHmacSHA224AndAES_256", "PBEWithHmacSHA256AndAES_256",
++            "PBEWithHmacSHA384AndAES_256", "PBEWithHmacSHA512AndAES_256"
++    };
++    private static final String[] pbeMacAlgs = new String[] {
++            "HmacPBESHA1", "HmacPBESHA224", "HmacPBESHA256",
++            "HmacPBESHA384", "HmacPBESHA512"
++    };
++    private static final KeyStore p12;
++    private static final String sep =
++    "=========================================================================";
++
++    static {
++        KeyStore tP12 = null;
++        try {
++            tP12 = KeyStore.getInstance("PKCS12");
++        } catch (KeyStoreException e) {}
++        p12 = tP12;
++    }
++
++    public void main(Provider sunPKCS11) throws Exception {
++        System.out.println("SunPKCS11: " + sunPKCS11.getName());
++        // Test all privacy PBE algorithms with an integrity algorithm fixed
++        for (String pbeCipherAlg : pbeCipherAlgs) {
++            testWith(sunPKCS11, pbeCipherAlg, pbeMacAlgs[0]);
++        }
++        // Test all integrity PBE algorithms with a privacy algorithm fixed
++        for (String pbeMacAlg : pbeMacAlgs) {
++            testWith(sunPKCS11, pbeCipherAlgs[0], pbeMacAlg);
++        }
++        System.out.println("TEST PASS - OK");
++    }
++
++    /*
++     * Consistency test: 1) store a secret key in a PKCS#12 keystore using
++     * PBE algorithms from SunPKCS11 and, 2) read the secret key from the
++     * PKCS#12 keystore using PBE algorithms from other security providers
++     * such as SunJCE.
++     */
++    private void testWith(Provider sunPKCS11, String pbeCipherAlg,
++            String pbeMacAlg) throws Exception {
++        System.out.println(sep + System.lineSeparator() +
++                "Cipher PBE: " + pbeCipherAlg + System.lineSeparator() +
++                "Mac PBE: " + pbeMacAlg);
++
++        System.setProperty("keystore.pkcs12.macAlgorithm", pbeMacAlg);
++        System.setProperty("keystore.pkcs12.keyProtectionAlgorithm",
++                pbeCipherAlg);
++
++        // Create an empty PKCS#12 keystore
++        ByteArrayOutputStream baos = new ByteArrayOutputStream();
++        p12.load(null, password);
++
++        // Use PBE privacy and integrity algorithms from SunPKCS11 to store
++        // the secret key
++        Security.insertProviderAt(sunPKCS11, 1);
++        p12.setKeyEntry(alias, key, password, null);
++        p12.store(baos, password);
++
++        // Use PBE privacy and integrity algorithms from other security
++        // providers, such as SunJCE, to read the secret key
++        Security.removeProvider(sunPKCS11.getName());
++        p12.load(new ByteArrayInputStream(baos.toByteArray()), password);
++        Key k = p12.getKey(alias, password);
++
++        if (!MessageDigest.isEqual(key.getEncoded(), k.getEncoded())) {
++            throw new Exception("Keys differ. Consistency check failed.");
++        }
++        System.out.println("Secret key import successful" + System.lineSeparator() + sep);
++    }
++
++    public static void main(String[] args) throws Exception {
++        main(new ImportKeyToP122());
++    }
++}
+diff --git a/test/jdk/sun/security/pkcs11/Mac/PBAMac.java b/test/jdk/sun/security/pkcs11/Mac/PBAMac.java
+new file mode 100644
+index 00000000000..6b5662f6b4c
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/Mac/PBAMac.java
+@@ -0,0 +1,187 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.math.BigInteger;
++import java.security.NoSuchAlgorithmException;
++import java.security.Provider;
++import java.security.Security;
++import java.util.Map;
++
++import javax.crypto.Mac;
++import javax.crypto.SecretKey;
++import javax.crypto.SecretKeyFactory;
++import javax.crypto.interfaces.PBEKey;
++import javax.crypto.spec.PBEKeySpec;
++import javax.crypto.spec.PBEParameterSpec;
++
++/*
++ * @test
++ * @bug 9999999
++ * @summary test password based authentication on SunPKCS11's Mac service
++ * @requires (jdk.version.major >= 8)
++ * @library /test/lib ..
++ * @run main/othervm/timeout=30 PBAMac
++ */
++
++public final class PBAMac {
++    public static void main(String[] args) throws Exception {
++        java.security.Security.getProviders();
++        PBAMac2.main(args);
++    }
++}
++
++final class PBAMac2 extends PKCS11Test {
++    private static final char[] password = "123456".toCharArray();
++    private static final byte[] salt = "abcdefgh".getBytes();
++    private static final int iterations = 1000;
++    private static final String plainText = "This is a know plain text!";
++    private static final String sep =
++    "=========================================================================";
++
++    private static enum Configuration {
++        // Provide salt & iterations through a PBEParameterSpec instance
++        PBEParameterSpec,
++
++        // Provide salt & iterations through an anonymous class implementing
++        // the javax.crypto.interfaces.PBEKey interface
++        AnonymousPBEKey,
++    }
++
++    // Generated with SunJCE
++    private static final Map<String, BigInteger> assertionData = Map.of(
++            "HmacPBESHA1", new BigInteger("febd26da5d63ce819770a2af1fc2857e" +
++                    "e2c9c41c", 16),
++            "HmacPBESHA224", new BigInteger("aa6a3a1c35a4b266fea62d1a871508" +
++                    "bd45f8ec326bcf16e09699063", 16),
++            "HmacPBESHA256", new BigInteger("af4d71121fd4e9d52eb42944d99b77" +
++                    "8ff64376fcf6af8d1dca3ec688dfada5c8", 16),
++            "HmacPBESHA384", new BigInteger("5d6d37764205985ffca7e4a6222752" +
++                    "a8bbd0520858da08ecafdc57e6246894675e375b9ba084f9ce7142" +
++                    "35f202cc3452", 16),
++            "HmacPBESHA512", new BigInteger("f586c2006cc2de73fd5743e5cca701" +
++                    "c942d3741a7a54a2a649ea36898996cf3c483f2d734179b47751db" +
++                    "e8373c980b4072136d2e2810f4e7276024a3e9081cc1", 16)
++            );
++
++    private static Provider sunJCE = Security.getProvider("SunJCE");
++
++    public void main(Provider sunPKCS11) throws Exception {
++        System.out.println("SunPKCS11: " + sunPKCS11.getName());
++        for (Configuration conf : Configuration.values()) {
++            testWith(sunPKCS11, "HmacPBESHA1", conf);
++            testWith(sunPKCS11, "HmacPBESHA224", conf);
++            testWith(sunPKCS11, "HmacPBESHA256", conf);
++            testWith(sunPKCS11, "HmacPBESHA384", conf);
++            testWith(sunPKCS11, "HmacPBESHA512", conf);
++        }
++        System.out.println("TEST PASS - OK");
++    }
++
++    private void testWith(Provider sunPKCS11, String algorithm,
++            Configuration conf) throws Exception {
++        System.out.println(sep + System.lineSeparator() + algorithm
++                + " (with " + conf.name() + ")");
++
++        BigInteger macResult = computeMac(sunPKCS11, algorithm, conf);
++        printByteArray("HMAC Result", macResult);
++
++        BigInteger expectedMacResult = computeExpectedMac(algorithm, conf);
++
++        if (!macResult.equals(expectedMacResult)) {
++            printByteArray("Expected HMAC Result", expectedMacResult);
++            throw new Exception("Expected HMAC Result did not match");
++        }
++    }
++
++    private BigInteger computeMac(Provider p, String algorithm,
++            Configuration conf) throws Exception {
++        Mac pbaMac;
++        try {
++            pbaMac = Mac.getInstance(algorithm, p);
++        } catch (NoSuchAlgorithmException e) {
++            return null;
++        }
++        switch (conf) {
++            case PBEParameterSpec -> {
++                SecretKey key = getPasswordOnlyPBEKey();
++                pbaMac.init(key, new PBEParameterSpec(salt, iterations));
++            }
++            case AnonymousPBEKey -> {
++                SecretKey key = getPasswordSaltIterationsPBEKey();
++                pbaMac.init(key);
++            }
++        }
++        return new BigInteger(1, pbaMac.doFinal(plainText.getBytes()));
++    }
++
++    private BigInteger computeExpectedMac(String algorithm, Configuration conf)
++            throws Exception {
++        if (sunJCE != null) {
++            BigInteger macResult = computeMac(sunJCE, algorithm, conf);
++            if (macResult != null) {
++                return macResult;
++            }
++            // Move to assertionData as it's unlikely that any of
++            // the algorithms are available.
++            sunJCE = null;
++        }
++        // If SunJCE or the algorithm are not available, assertionData
++        // is used instead.
++        return assertionData.get(algorithm);
++    }
++
++    private static SecretKey getPasswordOnlyPBEKey() throws Exception {
++        PBEKeySpec keySpec = new PBEKeySpec(password);
++        SecretKeyFactory skFac = SecretKeyFactory.getInstance("PBE");
++        SecretKey skey = skFac.generateSecret(keySpec);
++        keySpec.clearPassword();
++        return skey;
++    }
++
++    private static SecretKey getPasswordSaltIterationsPBEKey() {
++        return new PBEKey() {
++            public byte[] getSalt() { return salt.clone(); }
++            public int getIterationCount() { return iterations; }
++            public String getAlgorithm() { return "PBE"; }
++            public String getFormat() { return "RAW"; }
++            public char[] getPassword() { return password.clone(); }
++            public byte[] getEncoded() { return null; } // unused in PBA Mac
++        };
++    }
++
++    private static void printByteArray(String title, BigInteger b) {
++        String repr = (b == null) ? "buffer is null" : b.toString(16);
++        System.out.println(title + ": " + repr + System.lineSeparator());
++    }
++
++    public static void main(String[] args) throws Exception {
++        PBAMac2 test = new PBAMac2();
++        Provider p = Security.getProvider("SunPKCS11-NSS-FIPS");
++        if (p != null) {
++            test.main(p);
++        } else {
++            main(test);
++        }
++    }
++}
+diff --git a/test/jdk/sun/security/pkcs11/SecretKeyFactory/TestPBKD.java b/test/jdk/sun/security/pkcs11/SecretKeyFactory/TestPBKD.java
+new file mode 100644
+index 00000000000..67c3cee5970
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/SecretKeyFactory/TestPBKD.java
+@@ -0,0 +1,296 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.math.BigInteger;
++import java.security.NoSuchAlgorithmException;
++import java.security.Provider;
++import java.security.Security;
++import java.util.HashMap;
++import java.util.Map;
++
++import javax.crypto.SecretKeyFactory;
++import javax.crypto.spec.PBEKeySpec;
++
++/*
++ * @test
++ * @bug 9999999
++ * @summary test key derivation on SunPKCS11's SecretKeyFactory service
++ * @requires (jdk.version.major >= 8)
++ * @library /test/lib ..
++ * @modules java.base/com.sun.crypto.provider:open
++ * @run main/othervm/timeout=30 TestPBKD
++ */
++
++public final class TestPBKD {
++    public static void main(String[] args) throws Exception {
++        java.security.Security.getProviders();
++        TestPBKD2.main(args);
++    }
++}
++
++final class TestPBKD2 extends PKCS11Test {
++    private static final char[] password = "123456".toCharArray();
++    private static final byte[] salt = "abcdefgh".getBytes();
++    private static final int iterations = 1000;
++    private static final String sep =
++    "=========================================================================";
++
++    private static Provider sunJCE = Security.getProvider("SunJCE");
++
++    // Generated with SunJCE
++    private static final Map<String, BigInteger> assertionData =
++            new HashMap<>() {{
++                put("HmacPBESHA1", new BigInteger("5f7d1c360d1703cede76f47db" +
++                        "2fa3facc62e7694", 16));
++                put("HmacPBESHA224", new BigInteger("289563f799b708f522ab2a3" +
++                        "8d283d0afa8fc1d3d227fcb9236c3a035", 16));
++                put("HmacPBESHA256", new BigInteger("888defcf4ef37eb0647014a" +
++                        "d172dd6fa3b3e9d024b962dba47608eea9b9c4b79", 16));
++                put("HmacPBESHA384", new BigInteger("f5464b34253fadab8838d0d" +
++                        "b11980c1787a99bf6f6304f2d8c942e30bada523494f9d5a0f3" +
++                        "741e411de21add8b5718a8", 16));
++                put("HmacPBESHA512", new BigInteger("18ae94337b132c68c611bc2" +
++                        "e723ac24dcd44a46d900dae2dd6170380d4c34f90fef7bdeb5f" +
++                        "6fddeb0d2230003e329b7a7eefcd35810d364ba95d31b68bb61" +
++                        "e52", 16));
++                put("PBEWithHmacSHA1AndAES_128", new BigInteger("fdb3dcc2e81" +
++                        "244d4d56bf7ec8dd61dd7", 16));
++                put("PBEWithHmacSHA224AndAES_128", new BigInteger("5ef9e5c6f" +
++                        "df7c355f3b424233a9f24c2", 16));
++                put("PBEWithHmacSHA256AndAES_128", new BigInteger("c5af597b0" +
++                        "1b4f6baac8f62ff6f22bfb1", 16));
++                put("PBEWithHmacSHA384AndAES_128", new BigInteger("c3208ebc5" +
++                        "d6db88858988ec00153847d", 16));
++                put("PBEWithHmacSHA512AndAES_128", new BigInteger("b27e8f7fb" +
++                        "6a4bd5ebea892cd9a7f5043", 16));
++                put("PBEWithHmacSHA1AndAES_256", new BigInteger("fdb3dcc2e81" +
++                        "244d4d56bf7ec8dd61dd78a1b6fb3ad11d9ebd7f62027a2ccde" +
++                        "98", 16));
++                put("PBEWithHmacSHA224AndAES_256", new BigInteger("5ef9e5c6f" +
++                        "df7c355f3b424233a9f24c2c9c41793cb0948b8ea3aac240b8d" +
++                        "f64d", 16));
++                put("PBEWithHmacSHA256AndAES_256", new BigInteger("c5af597b0" +
++                        "1b4f6baac8f62ff6f22bfb1f319c3278c8b31cc616294716d4e" +
++                        "ab08", 16));
++                put("PBEWithHmacSHA384AndAES_256", new BigInteger("c3208ebc5" +
++                        "d6db88858988ec00153847d5b1b7a8723640a022dc332bcaefe" +
++                        "b356", 16));
++                put("PBEWithHmacSHA512AndAES_256", new BigInteger("b27e8f7fb" +
++                        "6a4bd5ebea892cd9a7f5043cefff9c38b07e599721e8d116189" +
++                        "5482", 16));
++                put("PBKDF2WithHmacSHA1", new BigInteger("fdb3dcc2e81244d4d5" +
++                        "6bf7ec8dd61dd78a1b6fb3ad11d9ebd7f62027a2cc", 16));
++                put("PBKDF2WithHmacSHA224", new BigInteger("5ef9e5c6fdf7c355" +
++                        "f3b424233a9f24c2c9c41793cb0948b8ea3aac240b8df64d1a0" +
++                        "736ec1c69eef1c7b2", 16));
++                put("PBKDF2WithHmacSHA256", new BigInteger("c5af597b01b4f6ba" +
++                        "ac8f62ff6f22bfb1f319c3278c8b31cc616294716d4eab080b9" +
++                        "add9db34a42ceb2fea8d27adc00f4", 16));
++                put("PBKDF2WithHmacSHA384", new BigInteger("c3208ebc5d6db888" +
++                        "58988ec00153847d5b1b7a8723640a022dc332bcaefeb356995" +
++                        "d076a949d35c42c7e1e1ca936c12f8dc918e497edf279a522b7" +
++                        "c99580e2613846b3919af637da", 16));
++                put("PBKDF2WithHmacSHA512", new BigInteger("b27e8f7fb6a4bd5e" +
++                        "bea892cd9a7f5043cefff9c38b07e599721e8d1161895482da2" +
++                        "55746844cc1030be37ba1969df10ff59554d1ac5468fa9b7297" +
++                        "7bb7fd52103a0a7b488cdb8957616c3e23a16bca92120982180" +
++                        "c6c11a4f14649b50d0ade3a", 16));
++                }};
++
++    static interface AssertData {
++        BigInteger derive(String pbAlgo, PBEKeySpec keySpec) throws Exception;
++    }
++
++    static final class P12PBKDAssertData implements AssertData {
++        private final int outLen;
++        private final String kdfAlgo;
++        private final int blockLen;
++
++        P12PBKDAssertData(int outLen, String kdfAlgo, int blockLen) {
++            this.outLen = outLen;
++            this.kdfAlgo = kdfAlgo;
++            this.blockLen = blockLen;
++        }
++
++        @Override
++        public BigInteger derive(String pbAlgo, PBEKeySpec keySpec)
++                throws Exception {
++            // Since we need to access an internal SunJCE API, we use reflection
++            Class<?> PKCS12PBECipherCore = Class.forName(
++                    "com.sun.crypto.provider.PKCS12PBECipherCore");
++
++            Field macKeyField = PKCS12PBECipherCore.getDeclaredField("MAC_KEY");
++            macKeyField.setAccessible(true);
++            int MAC_KEY = (int) macKeyField.get(null);
++
++            Method deriveMethod = PKCS12PBECipherCore.getDeclaredMethod(
++                    "derive", char[].class, byte[].class, int.class,
++                    int.class, int.class, String.class, int.class);
++            deriveMethod.setAccessible(true);
++
++            return new BigInteger(1, (byte[]) deriveMethod.invoke(null,
++                    keySpec.getPassword(), keySpec.getSalt(),
++                    keySpec.getIterationCount(), this.outLen,
++                    MAC_KEY, this.kdfAlgo, this.blockLen));
++        }
++    }
++
++    static final class PBKD2AssertData implements AssertData {
++        private final String kdfAlgo;
++        private final int keyLen;
++
++        PBKD2AssertData(String kdfAlgo, int keyLen) {
++            // Key length is pinned by the algorithm name (not kdfAlgo,
++            // but the algorithm under test: PBEWithHmacSHA*AndAES_*)
++            this.kdfAlgo = kdfAlgo;
++            this.keyLen = keyLen;
++        }
++
++        PBKD2AssertData(String kdfAlgo) {
++            // Key length is variable for the algorithm under test
++            // (kdfAlgo is the algorithm under test: PBKDF2WithHmacSHA*)
++            this(kdfAlgo, -1);
++        }
++
++        @Override
++        public BigInteger derive(String pbAlgo, PBEKeySpec keySpec)
++                throws Exception {
++            if (this.keyLen != -1) {
++                keySpec = new PBEKeySpec(
++                        keySpec.getPassword(), keySpec.getSalt(),
++                        keySpec.getIterationCount(), this.keyLen);
++            }
++            if (sunJCE != null) {
++                try {
++                    return new BigInteger(1, SecretKeyFactory.getInstance(
++                            this.kdfAlgo, sunJCE).generateSecret(keySpec)
++                            .getEncoded());
++                } catch (NoSuchAlgorithmException e) {
++                    // Move to assertionData as it's unlikely that any of
++                    // the algorithms are available.
++                    sunJCE = null;
++                }
++            }
++            // If SunJCE or the algorithm are not available, assertionData
++            // is used instead.
++            return assertionData.get(pbAlgo);
++        }
++    }
++
++    public void main(Provider sunPKCS11) throws Exception {
++        System.out.println("SunPKCS11: " + sunPKCS11.getName());
++        testWith(sunPKCS11, "HmacPBESHA1",
++                new P12PBKDAssertData(20, "SHA-1", 64));
++        testWith(sunPKCS11, "HmacPBESHA224",
++                new P12PBKDAssertData(28, "SHA-224", 64));
++        testWith(sunPKCS11, "HmacPBESHA256",
++                new P12PBKDAssertData(32, "SHA-256", 64));
++        testWith(sunPKCS11, "HmacPBESHA384",
++                new P12PBKDAssertData(48, "SHA-384", 128));
++        testWith(sunPKCS11, "HmacPBESHA512",
++                new P12PBKDAssertData(64, "SHA-512", 128));
++
++        testWith(sunPKCS11, "PBEWithHmacSHA1AndAES_128",
++                new PBKD2AssertData("PBKDF2WithHmacSHA1", 128));
++        testWith(sunPKCS11, "PBEWithHmacSHA224AndAES_128",
++                new PBKD2AssertData("PBKDF2WithHmacSHA224", 128));
++        testWith(sunPKCS11, "PBEWithHmacSHA256AndAES_128",
++                new PBKD2AssertData("PBKDF2WithHmacSHA256", 128));
++        testWith(sunPKCS11, "PBEWithHmacSHA384AndAES_128",
++                new PBKD2AssertData("PBKDF2WithHmacSHA384", 128));
++        testWith(sunPKCS11, "PBEWithHmacSHA512AndAES_128",
++                new PBKD2AssertData("PBKDF2WithHmacSHA512", 128));
++        testWith(sunPKCS11, "PBEWithHmacSHA1AndAES_256",
++                new PBKD2AssertData("PBKDF2WithHmacSHA1", 256));
++        testWith(sunPKCS11, "PBEWithHmacSHA224AndAES_256",
++                new PBKD2AssertData("PBKDF2WithHmacSHA224", 256));
++        testWith(sunPKCS11, "PBEWithHmacSHA256AndAES_256",
++                new PBKD2AssertData("PBKDF2WithHmacSHA256", 256));
++        testWith(sunPKCS11, "PBEWithHmacSHA384AndAES_256",
++                new PBKD2AssertData("PBKDF2WithHmacSHA384", 256));
++        testWith(sunPKCS11, "PBEWithHmacSHA512AndAES_256",
++                new PBKD2AssertData("PBKDF2WithHmacSHA512", 256));
++
++        // Use 1,5 * digest size as the testing derived key length (in bits)
++        testWith(sunPKCS11, "PBKDF2WithHmacSHA1", 240,
++                new PBKD2AssertData("PBKDF2WithHmacSHA1"));
++        testWith(sunPKCS11, "PBKDF2WithHmacSHA224", 336,
++                new PBKD2AssertData("PBKDF2WithHmacSHA224"));
++        testWith(sunPKCS11, "PBKDF2WithHmacSHA256", 384,
++                new PBKD2AssertData("PBKDF2WithHmacSHA256"));
++        testWith(sunPKCS11, "PBKDF2WithHmacSHA384", 576,
++                new PBKD2AssertData("PBKDF2WithHmacSHA384"));
++        testWith(sunPKCS11, "PBKDF2WithHmacSHA512", 768,
++                new PBKD2AssertData("PBKDF2WithHmacSHA512"));
++
++        System.out.println("TEST PASS - OK");
++    }
++
++    private static void testWith(Provider sunPKCS11, String algorithm,
++            AssertData assertData) throws Exception {
++        PBEKeySpec keySpec = new PBEKeySpec(password, salt, iterations);
++        testWith(sunPKCS11, algorithm, keySpec, assertData);
++    }
++
++    private static void testWith(Provider sunPKCS11, String algorithm,
++            int keyLen, AssertData assertData) throws Exception {
++        PBEKeySpec keySpec = new PBEKeySpec(password, salt, iterations, keyLen);
++        testWith(sunPKCS11, algorithm, keySpec, assertData);
++    }
++
++    private static void testWith(Provider sunPKCS11, String algorithm,
++            PBEKeySpec keySpec, AssertData assertData) throws Exception {
++        System.out.println(sep + System.lineSeparator() + algorithm);
++
++        SecretKeyFactory skFac = SecretKeyFactory.getInstance(
++                algorithm, sunPKCS11);
++        BigInteger derivedKey = new BigInteger(1,
++                skFac.generateSecret(keySpec).getEncoded());
++        printByteArray("Derived Key", derivedKey);
++
++        BigInteger expectedDerivedKey = assertData.derive(algorithm, keySpec);
++
++        if (!derivedKey.equals(expectedDerivedKey)) {
++            printByteArray("Expected Derived Key", expectedDerivedKey);
++            throw new Exception("Expected Derived Key did not match");
++        }
++    }
++
++    private static void printByteArray(String title, BigInteger b) {
++        String repr = (b == null) ? "buffer is null" : b.toString(16);
++        System.out.println(title + ": " + repr + System.lineSeparator());
++    }
++
++    public static void main(String[] args) throws Exception {
++        TestPBKD2 test = new TestPBKD2();
++        Provider p = Security.getProvider("SunPKCS11-NSS-FIPS");
++        if (p != null) {
++            test.main(p);
++        } else {
++            main(test);
++        }
++    }
++}
+diff --git a/test/jdk/sun/security/pkcs11/fips/NssdbPin.java b/test/jdk/sun/security/pkcs11/fips/NssdbPin.java
+new file mode 100644
+index 00000000000..ce01c655eb8
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/fips/NssdbPin.java
+@@ -0,0 +1,349 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.lang.reflect.Method;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.security.KeyStore;
++import java.security.Provider;
++import java.security.Security;
++import java.util.Arrays;
++import java.util.function.Consumer;
++import java.util.List;
++import javax.crypto.Cipher;
++import javax.crypto.spec.SecretKeySpec;
++
++import jdk.test.lib.process.Proc;
++import jdk.test.lib.util.FileUtils;
++
++/*
++ * @test
++ * @bug 9999999
++ * @summary
++ *   Test that the fips.nssdb.path and fips.nssdb.pin properties can be used
++ *   for a successful login into an NSS DB. Some additional unitary testing
++ *   is then performed. This test depends on NSS modutil and must be run in
++ *   FIPS mode (the SunPKCS11-NSS-FIPS security provider has to be available).
++ * @modules jdk.crypto.cryptoki/sun.security.pkcs11:+open
++ * @library /test/lib
++ * @requires (jdk.version.major >= 8)
++ * @run main/othervm/timeout=600 NssdbPin
++ * @author Martin Balao (mbalao@redhat.com)
++ */
++
++public final class NssdbPin {
++
++    // Public properties and names
++    private static final String FIPS_NSSDB_PATH_PROP = "fips.nssdb.path";
++    private static final String FIPS_NSSDB_PIN_PROP = "fips.nssdb.pin";
++    private static final String FIPS_PROVIDER_NAME = "SunPKCS11-NSS-FIPS";
++    private static final String NSSDB_TOKEN_NAME =
++            "NSS FIPS 140-2 Certificate DB";
++
++    // Data to be tested
++    private static final String[] PINS_TO_TEST =
++            new String[] {
++                    "",
++                    "1234567890abcdef1234567890ABCDEF\uA4F7"
++            };
++    private static enum PropType { SYSTEM, SECURITY }
++    private static enum LoginType { IMPLICIT, EXPLICIT }
++
++    // Internal test fields
++    private static final boolean DEBUG = true;
++    private static class TestContext {
++        String pin;
++        PropType propType;
++        Path workspace;
++        String nssdbPath;
++        Path nssdbPinFile;
++        LoginType loginType;
++        TestContext(String pin, Path workspace) {
++            this.pin = pin;
++            this.workspace = workspace;
++            this.nssdbPath = "sql:" + workspace;
++            this.loginType = LoginType.IMPLICIT;
++        }
++    }
++
++    public static void main(String[] args) throws Throwable {
++        if (args.length == 3) {
++            // Executed by a child process.
++            mainChild(args[0], args[1], LoginType.valueOf(args[2]));
++        } else if (args.length == 0) {
++            // Executed by the parent process.
++            mainLauncher();
++            // Test defaults
++            mainChild("sql:/etc/pki/nssdb", "", LoginType.IMPLICIT);
++            System.out.println("TEST PASS - OK");
++        } else {
++            throw new Exception("Unexpected number of arguments.");
++        }
++    }
++
++    private static void mainChild(String expectedPath, String expectedPin,
++            LoginType loginType) throws Throwable {
++        if (DEBUG) {
++            for (String prop : Arrays.asList(FIPS_NSSDB_PATH_PROP,
++                    FIPS_NSSDB_PIN_PROP)) {
++                System.out.println(prop + " (System): " +
++                        System.getProperty(prop));
++                System.out.println(prop + " (Security): " +
++                        Security.getProperty(prop));
++            }
++        }
++
++        /*
++         * Functional cross-test against an NSS DB generated by modutil
++         * with the same PIN. Check that we can perform a crypto operation
++         * that requires a login. The login might be explicit or implicit.
++         */
++        Provider p = Security.getProvider(FIPS_PROVIDER_NAME);
++        if (DEBUG) {
++            System.out.println(FIPS_PROVIDER_NAME + ": " + p);
++        }
++        if (p == null) {
++            throw new Exception(FIPS_PROVIDER_NAME + " initialization failed.");
++        }
++        if (DEBUG) {
++            System.out.println("Login type: " + loginType);
++        }
++        if (loginType == LoginType.EXPLICIT) {
++            // Do the expansion to account for truncation, so C_Login in
++            // the NSS Software Token gets a UTF-8 encoded PIN.
++            byte[] pinUtf8 = expectedPin.getBytes(StandardCharsets.UTF_8);
++            char[] pinChar = new char[pinUtf8.length];
++            for (int i = 0; i < pinChar.length; i++) {
++                pinChar[i] = (char)(pinUtf8[i] & 0xFF);
++            }
++            KeyStore.getInstance("PKCS11", p).load(null, pinChar);
++            if (DEBUG) {
++                System.out.println("Explicit login succeeded.");
++            }
++        }
++        if (DEBUG) {
++            System.out.println("Trying a crypto operation...");
++        }
++        final int blockSize = 16;
++        Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding", p);
++        cipher.init(Cipher.ENCRYPT_MODE,
++                new SecretKeySpec(new byte[blockSize], "AES"));
++        if (cipher.doFinal(new byte[blockSize]).length != blockSize) {
++            throw new Exception("Could not perform a crypto operation.");
++        }
++        if (DEBUG) {
++            if (loginType == LoginType.IMPLICIT) {
++                System.out.println("Implicit login succeeded.");
++            }
++            System.out.println("Crypto operation after login succeeded.");
++        }
++
++        if (loginType == LoginType.IMPLICIT) {
++            /*
++             * Additional unitary testing. Expected to succeed at this point.
++             */
++            if (DEBUG) {
++                System.out.println("Trying unitary test...");
++            }
++            String sysPathProp = System.getProperty(FIPS_NSSDB_PATH_PROP);
++            if (DEBUG) {
++                System.out.println("Path value (as a System property): " +
++                        sysPathProp);
++            }
++            if (!expectedPath.equals(sysPathProp)) {
++                throw new Exception("Path is different than expected: " +
++                        sysPathProp + " (actual) vs " + expectedPath +
++                        " (expected).");
++            }
++            Class<?> c = Class
++                    .forName("sun.security.pkcs11.FIPSTokenLoginHandler");
++            Method m = c.getDeclaredMethod("getFipsNssdbPin");
++            m.setAccessible(true);
++            String pin = null;
++            char[] pinChar = (char[]) m.invoke(c);
++            if (pinChar != null) {
++                byte[] pinUtf8 = new byte[pinChar.length];
++                for (int i = 0; i < pinUtf8.length; i++) {
++                    pinUtf8[i] = (byte) pinChar[i];
++                }
++                pin = new String(pinUtf8, StandardCharsets.UTF_8);
++            }
++            if (!expectedPin.isEmpty() && !expectedPin.equals(pin) ||
++                    expectedPin.isEmpty() && pin != null) {
++                throw new Exception("PIN is different than expected: '" + pin +
++                         "' (actual) vs '" + expectedPin + "' (expected).");
++            }
++            if (DEBUG) {
++                System.out.println("PIN value: " + pin);
++                System.out.println("Unitary test succeeded.");
++            }
++        }
++    }
++
++    private static void mainLauncher() throws Throwable {
++        for (String pin : PINS_TO_TEST) {
++            Path workspace = Files.createTempDirectory(null);
++            try {
++                TestContext ctx = new TestContext(pin, workspace);
++                createNSSDB(ctx);
++                {
++                    ctx.loginType = LoginType.IMPLICIT;
++                    for (PropType propType : PropType.values()) {
++                        ctx.propType = propType;
++                        pinLauncher(ctx);
++                        envLauncher(ctx);
++                        fileLauncher(ctx);
++                    }
++                }
++                explicitLoginLauncher(ctx);
++            } finally {
++                FileUtils.deleteFileTreeWithRetry(workspace);
++            }
++        }
++    }
++
++    private static void pinLauncher(TestContext ctx) throws Throwable {
++        launchTest(p -> {}, "pin:" + ctx.pin, ctx);
++    }
++
++    private static void envLauncher(TestContext ctx) throws Throwable {
++        final String NSSDB_PIN_ENV_VAR = "NSSDB_PIN_ENV_VAR";
++        launchTest(p -> p.env(NSSDB_PIN_ENV_VAR, ctx.pin),
++                "env:" + NSSDB_PIN_ENV_VAR, ctx);
++    }
++
++    private static void fileLauncher(TestContext ctx) throws Throwable {
++        // The file containing the PIN (ctx.nssdbPinFile) was created by the
++        // generatePinFile method, called from createNSSDB.
++        launchTest(p -> {}, "file:" + ctx.nssdbPinFile, ctx);
++    }
++
++    private static void explicitLoginLauncher(TestContext ctx)
++            throws Throwable {
++        ctx.loginType = LoginType.EXPLICIT;
++        ctx.propType = PropType.SYSTEM;
++        launchTest(p -> {}, "Invalid PIN, must be ignored", ctx);
++    }
++
++    private static void launchTest(Consumer<Proc> procCb, String pinPropVal,
++            TestContext ctx) throws Throwable {
++        if (DEBUG) {
++            System.out.println("Launching JVM with " + FIPS_NSSDB_PATH_PROP +
++                    "=" + ctx.nssdbPath + " and " + FIPS_NSSDB_PIN_PROP +
++                    "=" + pinPropVal);
++        }
++        Proc p = Proc.create(NssdbPin.class.getName())
++                .args(ctx.nssdbPath, ctx.pin, ctx.loginType.name());
++        if (ctx.propType == PropType.SYSTEM) {
++            p.prop(FIPS_NSSDB_PATH_PROP, ctx.nssdbPath);
++            p.prop(FIPS_NSSDB_PIN_PROP, pinPropVal);
++            // Make sure that Security properties defaults are not used.
++            p.secprop(FIPS_NSSDB_PATH_PROP, "");
++            p.secprop(FIPS_NSSDB_PIN_PROP, "");
++        } else if (ctx.propType == PropType.SECURITY) {
++            p.secprop(FIPS_NSSDB_PATH_PROP, ctx.nssdbPath);
++            pinPropVal = escapeForPropsFile(pinPropVal);
++            p.secprop(FIPS_NSSDB_PIN_PROP, pinPropVal);
++        } else {
++            throw new Exception("Unsupported property type.");
++        }
++        if (DEBUG) {
++            p.inheritIO();
++            p.prop("java.security.debug", "sunpkcs11");
++            p.debug(NssdbPin.class.getName());
++
++            // Need the launched process to connect to a debugger?
++            //System.setProperty("test.vm.opts", "-Xdebug -Xrunjdwp:" +
++            //         "transport=dt_socket,address=localhost:8000,suspend=y");
++        } else {
++            p.nodump();
++        }
++        procCb.accept(p);
++        p.start().waitFor(0);
++    }
++
++    private static String escapeForPropsFile(String str) throws Throwable {
++        StringBuffer sb = new StringBuffer();
++        for (int i = 0; i < str.length(); i++) {
++            int cp = str.codePointAt(i);
++            if (Character.UnicodeBlock.of(cp)
++                    == Character.UnicodeBlock.BASIC_LATIN) {
++                sb.append(Character.toChars(cp));
++            } else {
++                sb.append("\\u").append(String.format("%04X", cp));
++            }
++        }
++        return sb.toString();
++    }
++
++    private static void createNSSDB(TestContext ctx) throws Throwable {
++        ProcessBuilder pb = getModutilPB(ctx, "-create");
++        if (DEBUG) {
++            System.out.println("Creating an NSS DB in " + ctx.workspace +
++                    "...");
++            System.out.println("cmd: " + String.join(" ", pb.command()));
++        }
++        if (pb.start().waitFor() != 0) {
++            throw new Exception("NSS DB creation failed.");
++        }
++        generatePinFile(ctx);
++        pb = getModutilPB(ctx, "-changepw", NSSDB_TOKEN_NAME,
++                "-newpwfile", ctx.nssdbPinFile.toString());
++        if (DEBUG) {
++            System.out.println("NSS DB created.");
++            System.out.println("Changing NSS DB PIN...");
++            System.out.println("cmd: " + String.join(" ", pb.command()));
++        }
++        if (pb.start().waitFor() != 0) {
++            throw new Exception("NSS DB PIN change failed.");
++        }
++        if (DEBUG) {
++            System.out.println("NSS DB PIN changed.");
++        }
++    }
++
++    private static ProcessBuilder getModutilPB(TestContext ctx, String... args)
++            throws Throwable {
++        ProcessBuilder pb = new ProcessBuilder("modutil", "-force");
++        List<String> pbCommand = pb.command();
++        if (args != null) {
++            pbCommand.addAll(Arrays.asList(args));
++        }
++        pbCommand.add("-dbdir");
++        pbCommand.add(ctx.nssdbPath);
++        if (DEBUG) {
++            pb.inheritIO();
++        } else {
++            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
++        }
++        return pb;
++    }
++
++    private static void generatePinFile(TestContext ctx) throws Throwable {
++        ctx.nssdbPinFile = Files.createTempFile(ctx.workspace, null, null);
++        Files.writeString(ctx.nssdbPinFile, ctx.pin + System.lineSeparator() +
++                "2nd line with garbage");
++    }
++}
+diff --git a/test/jdk/sun/security/pkcs11/fips/VerifyMissingAttributes.java b/test/jdk/sun/security/pkcs11/fips/VerifyMissingAttributes.java
+new file mode 100644
+index 00000000000..87f1ad04505
+--- /dev/null
++++ b/test/jdk/sun/security/pkcs11/fips/VerifyMissingAttributes.java
+@@ -0,0 +1,77 @@
++/*
++ * Copyright (c) 2022, Red Hat, Inc.
++ *
++ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
++ *
++ * This code is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 only, as
++ * published by the Free Software Foundation.
++ *
++ * This code is distributed in the hope that it will be useful, but WITHOUT
++ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
++ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
++ * version 2 for more details (a copy is included in the LICENSE file that
++ * accompanied this code).
++ *
++ * You should have received a copy of the GNU General Public License version
++ * 2 along with this work; if not, write to the Free Software Foundation,
++ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
++ *
++ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
++ * or visit www.oracle.com if you need additional information or have any
++ * questions.
++ */
++
++import java.security.Provider;
++import java.security.Security;
++
++/*
++ * @test
++ * @bug 9999999
++ * @requires (jdk.version.major >= 8)
++ * @run main/othervm/timeout=30 VerifyMissingAttributes
++ * @author Martin Balao (mbalao@redhat.com)
++ */
++
++public final class VerifyMissingAttributes {
++
++    private static final String[] svcAlgImplementedIn = {
++            "AlgorithmParameterGenerator.DSA",
++            "AlgorithmParameters.DSA",
++            "CertificateFactory.X.509",
++            "KeyStore.JKS",
++            "KeyStore.CaseExactJKS",
++            "KeyStore.DKS",
++            "CertStore.Collection",
++            "CertStore.com.sun.security.IndexedCollection"
++    };
++
++    public static void main(String[] args) throws Throwable {
++        Provider sunProvider = Security.getProvider("SUN");
++        for (String svcAlg : svcAlgImplementedIn) {
++            String filter = svcAlg + " ImplementedIn:Software";
++            doQuery(sunProvider, filter);
++        }
++        if (Double.parseDouble(
++                System.getProperty("java.specification.version")) >= 17) {
++            String filter = "KeyFactory.RSASSA-PSS SupportedKeyClasses:" +
++                    "java.security.interfaces.RSAPublicKey" +
++                    "|java.security.interfaces.RSAPrivateKey";
++            doQuery(Security.getProvider("SunRsaSign"), filter);
++        }
++        System.out.println("TEST PASS - OK");
++    }
++
++    private static void doQuery(Provider expectedProvider, String filter)
++            throws Exception {
++        if (expectedProvider == null) {
++            throw new Exception("Provider not found.");
++        }
++        Provider[] providers = Security.getProviders(filter);
++        if (providers == null || providers.length != 1 ||
++                providers[0] != expectedProvider) {
++            throw new Exception("Failure retrieving the provider with this" +
++                    " query: " + filter);
++        }
++    }
++}

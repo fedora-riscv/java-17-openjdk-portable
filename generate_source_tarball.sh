@@ -17,7 +17,7 @@
 # PROJECT_NAME=release
 # OPENJDK_URL=http://icedtea.classpath.org/hg/
 # TO_COMPRESS="*/tapset"
-# 
+#
 # They are used to create correct name and are used in construction of sources url (unless REPO_ROOT is set)
 
 # This script creates a single source tarball out of the repository
@@ -60,6 +60,7 @@ if [ "x$VERSION" = "x" ] ; then
     exit 2
 fi
 echo "Version: ${VERSION}"
+
 NUM_VER=${VERSION##jdk-}
 RELEASE_VER=${NUM_VER%%+*}
 BUILD_VER=${NUM_VER##*+}
@@ -71,23 +72,23 @@ if [ "x$BOOT_JDK" = "x" ] ; then
     BOOT_JDK=/usr/lib/jvm/java-${MAJOR_VER}-openjdk;
     echo -n "Checking for ${BOOT_JDK}...";
     if [ -d ${BOOT_JDK} -a -x ${BOOT_JDK}/bin/java ] ; then
-	echo "Boot JDK found at ${BOOT_JDK}";
+        echo "Boot JDK found at ${BOOT_JDK}";
     else
-	echo "Not found";
-	PREV_VER=$((${MAJOR_VER} - 1));
-	BOOT_JDK=/usr/lib/jvm/java-${PREV_VER}-openjdk;
-	echo -n "Checking for ${BOOT_JDK}...";
-	if [ -d ${BOOT_JDK} -a -x ${BOOT_JDK}/bin/java ] ; then
-	    echo "Boot JDK found at ${BOOT_JDK}";
-	else
-	    echo "Not found";
-	    exit 4;
-	fi
+        echo "Not found";
+        PREV_VER=$((${MAJOR_VER} - 1));
+        BOOT_JDK=/usr/lib/jvm/java-${PREV_VER}-openjdk;
+        echo -n "Checking for ${BOOT_JDK}...";
+        if [ -d ${BOOT_JDK} -a -x ${BOOT_JDK}/bin/java ] ; then
+            echo "Boot JDK found at ${BOOT_JDK}";
+        else
+            echo "Not found";
+            exit 4;
+        fi
     fi
 else
     echo "Boot JDK: ${BOOT_JDK}";
 fi
-    
+
 # REPO_NAME is only needed when we default on REPO_ROOT and FILE_NAME_ROOT
 if [ "x$FILE_NAME_ROOT" = "x" -o "x$REPO_ROOT" = "x" ] ; then
   if [ "x$PROJECT_NAME" = "x" ] ; then
