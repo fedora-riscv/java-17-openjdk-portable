@@ -391,7 +391,7 @@
 %global top_level_dir_name   %{origin}
 %global top_level_dir_name_backup %{top_level_dir_name}-backup
 %global buildver        7
-%global rpmrelease      2
+%global rpmrelease      3
 # Priority must be 8 digits in total; up to openjdk 1.8, we were using 18..... so when we moved to 11, we had to add another digit
 %if %is_system_jdk
 # Using 10 digits may overflow the int used for priority, so we combine the patch and build versions
@@ -1633,6 +1633,9 @@ done
 %license %{unpacked_licenses}/%{jdkportablesourcesarchive -- %%{nil}}
 
 %changelog
+* Wed May 10 2023 Jiri Vanek <gnu.andrew@redhat.com> - 1:17.0.7.0.7-3
+- enabled all crypto
+
 * Tue Mar 09 2023 Jiri Vanek <jvanekw@redhat.com> - 1:17.0.7.0.7-2
 - added and applied, on demand, patch2003 jdk8305995-footprint_regression_from_jdk_8224957
 

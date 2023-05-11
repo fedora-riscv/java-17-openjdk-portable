@@ -26,13 +26,6 @@
 # level folder, name is created, based on parameter
 #
 
-if [ ! "x$PR3823" = "x" ] ; then
-  if [ ! -f "$PR3823" ] ; then
-    echo "You have specified PR3823 as $PR3823 but it does not exist. Exiting"
-    exit 1
-  fi
-fi
-
 set -e
 
 OPENJDK_URL_DEFAULT=https://github.com
@@ -49,7 +42,6 @@ if [ "x$1" = "xhelp" ] ; then
     echo "COMPRESSION - the compression type to use (optional; defaults to ${COMPRESSION_DEFAULT})"
     echo "FILE_NAME_ROOT - name of the archive, minus extensions (optional; defaults to PROJECT_NAME-REPO_NAME-VERSION)"
     echo "TO_COMPRESS - what part of clone to pack (default is openjdk)"
-    echo "PR3823 - the path to the PR3823 patch to apply (optional; downloaded if unavailable)"
     echo "BOOT_JDK - the bootstrap JDK to satisfy the configure run"
     exit 1;
 fi
@@ -60,7 +52,6 @@ if [ "x$VERSION" = "x" ] ; then
     exit 2
 fi
 echo "Version: ${VERSION}"
-
 NUM_VER=${VERSION##jdk-}
 RELEASE_VER=${NUM_VER%%+*}
 BUILD_VER=${NUM_VER##*+}
@@ -142,36 +133,6 @@ else
   popd
 fi
 pushd "${FILE_NAME_ROOT}"
-    if [ -d openjdk/src ]; then
-        pushd openjdk
-            echo "Removing EC source code we don't build"
-            CRYPTO_PATH=src/jdk.crypto.ec/share/native/libsunec/impl
-            rm -vf ${CRYPTO_PATH}/ec2.h
-            rm -vf ${CRYPTO_PATH}/ec2_163.c
-            rm -vf ${CRYPTO_PATH}/ec2_193.c
-            rm -vf ${CRYPTO_PATH}/ec2_233.c
-            rm -vf ${CRYPTO_PATH}/ec2_aff.c
-            rm -vf ${CRYPTO_PATH}/ec2_mont.c
-            rm -vf ${CRYPTO_PATH}/ecp_192.c
-            rm -vf ${CRYPTO_PATH}/ecp_224.c
-
-            echo "Syncing EC list with NSS"
-            if [ "x$PR3823" = "x" ] ; then
-                # get PR3823.patch (from https://github.com/icedtea-git/icedtea) in the ${ICEDTEA_VERSION} branch
-                # Do not push it or publish it
-                echo "PR3823 not found. Downloading..."
-                wget -v https://github.com/icedtea-git/icedtea/raw/${ICEDTEA_VERSION}/patches/pr3823.patch
-                echo "Applying ${PWD}/pr3823.patch"
-                patch -Np1 < pr3823.patch
-                rm pr3823.patch
-            else
-                echo "Applying ${PR3823}"
-                patch -Np1 < $PR3823
-            fi;
-            find . -name '*.orig' -exec rm -vf '{}' ';'
-        popd
-    fi
-
     # Generate .src-rev so build has knowledge of the revision the tarball was created from
     mkdir build
     pushd build
@@ -186,17 +147,17 @@ pushd "${FILE_NAME_ROOT}"
 
     # Remove history and GHA
     echo "find openjdk -name '.hgtags'"
-    find openjdk -name '.hgtags' -exec rm -vf '{}' '+'
+    find openjdk -name '.hgtags' -exec rm -fv '{}' '+'
     echo "find openjdk -name '.hgignore'"
-    find openjdk -name '.hgignore' -exec rm -vf '{}' '+'
+    find openjdk -name '.hgignore' -exec rm -fv '{}' '+'
     echo "find openjdk -name '.gitattributes'"
-    find openjdk -name '.gitattributes' -exec rm -vf '{}' '+'
+    find openjdk -name '.gitattributes' -exec rm -fv '{}' '+'
     echo "find openjdk -name '.gitignore'"
-    find openjdk -name '.gitignore' -exec rm -vf '{}' '+'
+    find openjdk -name '.gitignore' -exec rm -fv '{}' '+'
     echo "find openjdk -name '.git'"
-    find openjdk -name '.git' -exec rm -rvf '{}' '+'
+    find openjdk -name '.git' -exec rm -rfv '{}' '+'
     echo "find openjdk -name '.github'"
-    find openjdk -name '.github' -exec rm -rvf '{}' '+'
+    find openjdk -name '.github' -exec rm -rfv '{}' '+'
 
     echo "Compressing remaining forest"
     if [ "X$COMPRESSION" = "Xxz" ] ; then
