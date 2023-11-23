@@ -8,7 +8,7 @@
 # In any case you have to set PROJECT_NAME REPO_NAME and VERSION. eg:
 # PROJECT_NAME=openjdk
 # REPO_NAME=jdk17u
-# VERSION=jdk-17.0.7+7
+# VERSION=jdk-17.0.7+9
 # or to eg prepare systemtap:
 # icedtea7's jstack and other tapsets
 # VERSION=6327cf1cea9e
@@ -29,8 +29,6 @@ set -e
 
 OPENJDK_URL_DEFAULT=https://github.com
 COMPRESSION_DEFAULT=xz
-# Corresponding IcedTea version
-ICEDTEA_VERSION=12.0
 
 if [ "x$1" = "xhelp" ] ; then
     echo -e "Behaviour may be specified by setting the following variables:\n"
@@ -40,8 +38,8 @@ if [ "x$1" = "xhelp" ] ; then
     echo "OPENJDK_URL - the URL to retrieve code from (optional; defaults to ${OPENJDK_URL_DEFAULT})"
     echo "COMPRESSION - the compression type to use (optional; defaults to ${COMPRESSION_DEFAULT})"
     echo "FILE_NAME_ROOT - name of the archive, minus extensions (optional; defaults to PROJECT_NAME-REPO_NAME-VERSION)"
-    echo "REPO_ROOT - the location of the Git repository to archive (optional; defaults to OPENJDK_URL/PROJECT_NAME/REPO_NAME)"
-    echo "TO_COMPRESS - what part of clone to pack (default is openjdk)"
+    echo "REPO_ROOT - the location of the Git repository to archive (optional; defaults to OPENJDK_URL/PROJECT_NAME/REPO_NAME.git)"
+    echo "TO_COMPRESS - what part of clone to pack (default is ${VERSION})"
     echo "BOOT_JDK - the bootstrap JDK to satisfy the configure run"
     exit 1;
 fi
@@ -52,6 +50,7 @@ if [ "x$VERSION" = "x" ] ; then
     exit 2
 fi
 echo "Version: ${VERSION}"
+
 NUM_VER=${VERSION##jdk-}
 RELEASE_VER=${NUM_VER%%+*}
 BUILD_VER=${NUM_VER##*+}
@@ -117,8 +116,8 @@ if [ "x$REPO_ROOT" = "x" ] ; then
 fi;
 
 if [ "x$TO_COMPRESS" = "x" ] ; then
-    TO_COMPRESS="openjdk"
-    echo "No targets to be compressed specified, ; default to ${TO_COMPRESS}"
+    TO_COMPRESS="${VERSION}"
+    echo "No targets to be compressed specified ; default to ${TO_COMPRESS}"
 fi;
 
 echo -e "Settings:"
@@ -140,9 +139,10 @@ else
   mkdir "${FILE_NAME_ROOT}"
   pushd "${FILE_NAME_ROOT}"
     echo "Cloning ${VERSION} root repository from ${REPO_ROOT}"
-    git clone -b ${VERSION} ${REPO_ROOT} openjdk
+    git clone -b ${VERSION} ${REPO_ROOT} ${VERSION}
   popd
 fi
+
 pushd "${FILE_NAME_ROOT}"
     # Generate .src-rev so build has knowledge of the revision the tarball was created from
     mkdir build
@@ -153,22 +153,22 @@ pushd "${FILE_NAME_ROOT}"
     rm -rf build
 
     # Remove commit checks
-    echo "Removing $(find openjdk -name '.jcheck' -print)"
-    find openjdk -name '.jcheck' -print0 | xargs -0 rm -rf
+    echo "Removing $(find ${VERSION} -name '.jcheck' -print)"
+    find ${VERSION} -name '.jcheck' -print0 | xargs -0 rm -r
 
     # Remove history and GHA
-    echo "find openjdk -name '.hgtags'"
-    find openjdk -name '.hgtags' -exec rm -fv '{}' '+'
-    echo "find openjdk -name '.hgignore'"
-    find openjdk -name '.hgignore' -exec rm -fv '{}' '+'
-    echo "find openjdk -name '.gitattributes'"
-    find openjdk -name '.gitattributes' -exec rm -fv '{}' '+'
-    echo "find openjdk -name '.gitignore'"
-    find openjdk -name '.gitignore' -exec rm -fv '{}' '+'
-    echo "find openjdk -name '.git'"
-    find openjdk -name '.git' -exec rm -rfv '{}' '+'
-    echo "find openjdk -name '.github'"
-    find openjdk -name '.github' -exec rm -rfv '{}' '+'
+    echo "find ${VERSION} -name '.hgtags'"
+    find ${VERSION} -name '.hgtags' -exec rm -fv '{}' '+'
+    echo "find ${VERSION} -name '.hgignore'"
+    find ${VERSION} -name '.hgignore' -exec rm -fv '{}' '+'
+    echo "find ${VERSION} -name '.gitattributes'"
+    find ${VERSION} -name '.gitattributes' -exec rm -fv '{}' '+'
+    echo "find ${VERSION} -name '.gitignore'"
+    find ${VERSION} -name '.gitignore' -exec rm -fv '{}' '+'
+    echo "find ${VERSION} -name '.git'"
+    find ${VERSION} -name '.git' -exec rm -rfv '{}' '+'
+    echo "find ${VERSION} -name '.github'"
+    find ${VERSION} -name '.github' -exec rm -rfv '{}' '+'
 
     echo "Compressing remaining forest"
     if [ "X$COMPRESSION" = "Xxz" ] ; then
