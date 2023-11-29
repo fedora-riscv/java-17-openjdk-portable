@@ -1321,8 +1321,6 @@ function packagejdk() {
     mkdir -p ${packagesdir}
     pushd ${imagesdir}
 
-    echo "Packaging build from ${imagesdir} to ${packagesdir}..."
-
     if [ "x$suffix" = "x" ] ; then
         nameSuffix=""
     else
