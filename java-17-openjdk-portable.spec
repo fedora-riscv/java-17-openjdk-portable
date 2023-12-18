@@ -1552,10 +1552,11 @@ $JAVA_HOME/bin/java $(echo $(basename %{SOURCE16})|sed "s|\.java||") "%{oj_vendo
 if ! nm $JAVA_HOME/bin/java | grep set_speculation ; then true ; else false; fi
 
 # Check alt-java launcher has SSB mitigation on supported architectures
+# set_speculation function exists in both cases, so check for prctl call
 %ifarch %{ssbd_arches}
-nm $JAVA_HOME/bin/%{alt_java_name} | grep set_speculation
+nm $JAVA_HOME/bin/%{alt_java_name} | grep prctl
 %else
-if ! nm $JAVA_HOME/bin/%{alt_java_name} | grep set_speculation ; then true ; else false; fi
+if ! nm $JAVA_HOME/bin/%{alt_java_name} | grep prctl ; then true ; else false; fi
 %endif
 
 %if ! 0%{?flatpak}
@@ -1572,9 +1573,8 @@ $JAVA_HOME/bin/java -Djava.locale.providers=CLDR $(echo $(basename %{SOURCE18})|
 export STATIC_LIBS_HOME=${top_dir_abs_staticlibs_build_path}/images/%{static_libs_image}
 ls -l $STATIC_LIBS_HOME
 ls -l $STATIC_LIBS_HOME/lib
-# they are here, but grep do not find the remainders
-#readelf --debug-dump $STATIC_LIBS_HOME/lib/libfdlibm.a | grep w_remainder.c
-#readelf --debug-dump $STATIC_LIBS_HOME/lib/libfdlibm.a | grep e_remainder.c
+readelf --debug-dump $STATIC_LIBS_HOME/lib/libnet.a | grep Inet4AddressImpl.c
+readelf --debug-dump $STATIC_LIBS_HOME/lib/libnet.a | grep Inet6AddressImpl.c
 %endif
 
 # Release builds strip the debug symbols into external .debuginfo files
