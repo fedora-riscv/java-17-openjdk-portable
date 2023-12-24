@@ -129,9 +129,9 @@
 # Set of architectures for which we build fastdebug builds
 %global fastdebug_arches x86_64 ppc64le aarch64
 # Set of architectures with a Just-In-Time (JIT) compiler
-%global jit_arches      %{arm} %{aarch64} %{ix86} %{power64} s390x sparcv9 sparc64 x86_64
+%global jit_arches      %{arm} %{aarch64} %{ix86} %{power64} s390x sparcv9 sparc64 x86_64 riscv64
 # Set of architectures which use the Zero assembler port (!jit_arches)
-%global zero_arches ppc s390 riscv64
+%global zero_arches ppc s390
 # Set of architectures which run a full bootstrap cycle
 %global bootstrap_arches %{jit_arches}
 # Set of architectures which support SystemTap tapsets
@@ -139,7 +139,7 @@
 # Set of architectures with a Ahead-Of-Time (AOT) compiler
 %global aot_arches      x86_64 %{aarch64}
 # Set of architectures which support the serviceability agent
-%global sa_arches       %{ix86} x86_64 sparcv9 sparc64 %{aarch64} %{power64} %{arm}
+%global sa_arches       %{ix86} x86_64 sparcv9 sparc64 %{aarch64} %{power64} %{arm} riscv64
 # Set of architectures which support class data sharing
 # As of JDK-8005165 in OpenJDK 10, class sharing is not arch-specific
 # However, it does segfault on the Zero assembler port, so currently JIT only
@@ -147,7 +147,7 @@
 # Set of architectures for which we build the Shenandoah garbage collector
 %global shenandoah_arches x86_64 %{aarch64}
 # Set of architectures for which we build the Z garbage collector
-%global zgc_arches x86_64
+%global zgc_arches x86_64 riscv64
 # Set of architectures for which alt-java has SSB mitigation
 %global ssbd_arches x86_64
 # Set of architectures for which java has short vector math library (libjsvml.so)
@@ -1809,6 +1809,9 @@ done
 %endif
 
 %changelog
+* Sun Dec 24 2023 Liu Yang <Yang.Liu.sn@gmail.com> - 1:17.0.9.0.9-3.rv64
+- Jit is supportted for riscv64.
+
 * Wed Dec 13 2023 Jiri Vanek <jvanek@redhat.com> - 1:17.0.9.0.9-3
 - packing generated sources
 
